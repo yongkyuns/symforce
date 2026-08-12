@@ -24,3 +24,10 @@ This actually defines the fixed-size problem, taking the `Values` built by `buil
 ### `run_bundle_adjustment.cc`
 
 This is the C++ file that actually runs the optimization.  It builds up the `Values` for the problem and builds a factor graph.  In this example, the C++ optimization consists of one `sym::Factor`, with a single generated linearization function that contains all of the symbolic residuals.
+
+### `rust/`
+
+The Rust + stack-algebra port uses the same fixed 26-dimensional state and the same dataset as the
+C++ example. Its generated `GlobalBundleFactor` assembles one compile-time 72-residual by 26-state
+linearization from the generated local kernels, matching the C++ single-factor boundary; see
+`rust/README.md` for the parity result.

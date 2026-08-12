@@ -12,9 +12,9 @@ to estimate the trajectory of the robot given known landmarks and noisy measurem
 
 ### `robot_3d_localization.py`:
 
-The main entry point for the symbolic problem.  In this file, we:
+The main entry point for the symbolic problem. In this file, we:
 
-1. Define the symbolic residual functions we'll need
+1. Assemble the symbolic problem using the shared residuals in `residuals.py`
 2. Build a symbolic factor graph for the full problem, and turn that into a single combined residual vector
 3. Build a Python `Values` with numerical inputs to the problem - this includes the sampled measurements as well as initial guesses for the optimized variables (the poses)
 4. Run the optimization from Python, creating an `Optimizer` and calling it with the created factors and `Values`.
@@ -31,6 +31,15 @@ Runs the optimization from C++, using a fixed-size linearization function for th
 ### `common.h`:
 
 Contains helper functions to build up the C++ `sym::Values` for the problem and create default params for the `Optimizer`
+
+### `rust/`:
+
+Contains the experimental Rust path. Run `../generate_rust.py` to generate the
+matching and odometry factors from `residuals.py`, then use `cargo run` from the
+`rust` directory. The C++/Rust residual and Jacobian parity check lives in
+`test/symforce_examples_robot_3d_localization_rust_codegen_test.py`.
+The example uses `symforce-rust` for `Pose3` and `stack-algebra` for linear
+algebra and Cholesky decomposition.
 
 ### `plotting.py`:
 

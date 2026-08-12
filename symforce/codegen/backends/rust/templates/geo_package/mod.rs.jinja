@@ -1,0 +1,9 @@
+//! Generated SymForce geometry package backed by `stack-algebra`.
+
+{% for cls in geo_types %}
+pub mod {{ cls.__name__.lower() }};
+{% endfor %}
+
+{% for cls in geo_types %}
+pub use {{ cls.__name__.lower() }}::{{ cls.__name__ }};
+{% endfor %}

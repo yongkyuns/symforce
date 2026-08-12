@@ -82,9 +82,9 @@ pub mod sym {
 
         // Intermediate terms (5)
         let _tmp0: f32 = 2_f32.ln();
-        let _tmp1: f32 = core::f32::consts::PI.powf((-1_f32 / 1_f32));
-        let _tmp2: f32 = 2_f32.powf((1_f32 / 2_f32));
-        let _tmp3: f32 = x.powf((1_f32 / 2_f32));
+        let _tmp1: f32 = 1.0 / (core::f32::consts::PI);
+        let _tmp2: f32 = 2_f32.sqrt();
+        let _tmp3: f32 = x.sqrt();
         let _tmp4: f32 = x + y;
 
         // Output terms (56)
@@ -113,7 +113,7 @@ pub mod sym {
         }
 
         if let Some(res6) = res6 {
-            *res6 = _tmp0.powf((-1_f32 / 1_f32));
+            *res6 = 1.0 / (_tmp0);
         }
 
         if let Some(res7) = res7 {
@@ -141,11 +141,11 @@ pub mod sym {
         }
 
         if let Some(res13) = res13 {
-            *res13 = 2_f32 * _tmp1;
+            *res13 = 2.0_f32 * _tmp1;
         }
 
         if let Some(res14) = res14 {
-            *res14 = 2_f32 / core::f32::consts::PI.powf((1_f32 / 2_f32));
+            *res14 = 2.0_f32 / core::f32::consts::PI.sqrt();
         }
 
         if let Some(res15) = res15 {
@@ -229,23 +229,23 @@ pub mod sym {
         }
 
         if let Some(res35) = res35 {
-            *res35 = 1.0_f32 * x - 5.5_f32 * (0.181818181818182_f32 * x).floor();
+            *res35 = (1.0_f32 * x).rem_euclid(5.5_f32);
         }
 
         if let Some(res36) = res36 {
-            *res36 = x + 1_f32;
+            *res36 = x + 1.0_f32;
         }
 
         if let Some(res37) = res37 {
-            *res37 = 2_f32 * x;
+            *res37 = 2.0_f32 * x;
         }
 
         if let Some(res38) = res38 {
-            *res38 = x.powf((2_f32 / 1_f32));
+            *res38 = (x * x);
         }
 
         if let Some(res39) = res39 {
-            *res39 = x.powf((3_f32 / 1_f32));
+            *res39 = (x * x * x);
         }
 
         if let Some(res40) = res40 {
@@ -261,13 +261,13 @@ pub mod sym {
         }
 
         if let Some(res43) = res43 {
-            *res43 = x.powf((3_f32 / 2_f32));
+            *res43 = (x * x.sqrt());
         }
 
         if let Some(res44) = res44 {
-            *res44 = if (x < 0.0) {
+            *res44 = if (x < 0.0_f32) {
                 0.0
-            } else if (x == 0.0) {
+            } else if (x == 0.0_f32) {
                 (1_f32 / 2_f32)
             } else {
                 1_f32
@@ -283,15 +283,15 @@ pub mod sym {
         }
 
         if let Some(res47) = res47 {
-            *res47 = x.max(y);
+            *res47 = if (x >= y) { x } else { y };
         }
 
         if let Some(res48) = res48 {
-            *res48 = x.min(y);
+            *res48 = if (x <= y) { x } else { y };
         }
 
         if let Some(res49) = res49 {
-            *res49 = x - y * (x / y).floor();
+            *res49 = (x).rem_euclid(y);
         }
 
         if let Some(res50) = res50 {
@@ -307,11 +307,11 @@ pub mod sym {
         }
 
         if let Some(res53) = res53 {
-            *res53 = _tmp4.powf((2_f32 / 1_f32));
+            *res53 = (_tmp4 * _tmp4);
         }
 
         if let Some(res54) = res54 {
-            *res54 = _tmp4.powf((3_f32 / 1_f32));
+            *res54 = (_tmp4 * _tmp4 * _tmp4);
         }
 
         if let Some(res55) = res55 {

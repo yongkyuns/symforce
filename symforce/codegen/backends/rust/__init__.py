@@ -9,4 +9,5 @@ __doc__ = (Path(__file__).parent / "README.rst").read_text()
 
 from .rust_code_printer import RustCodePrinter
 from .rust_code_printer import ScalarType
+from .rust_config import RustAlgebra
 from .rust_config import RustConfig

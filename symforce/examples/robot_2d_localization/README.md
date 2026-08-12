@@ -16,3 +16,17 @@ Sets up and solves the optimization problem step-by-step.  See the [tutorial](ht
 ### `plotting.py`:
 
 Contains helper functions for visualizing the optimization problem
+
+### `residuals.py`:
+
+Contains the backend-neutral symbolic residual definitions shared by the Python, C++, and Rust
+code-generation paths.
+
+### `rust/`:
+
+Contains the experimental Rust path. The generated factors use `symforce-rust`
+for `Pose2`, `stack-algebra` for linear algebra, and `symforce-rust` for factor
+assembly and Levenberg–Marquardt optimization.
+
+To validate all C++/Rust example results together, run
+`PYTHONPATH=. .venv/bin/python symforce/examples/rust_parity.py` from the repository root.

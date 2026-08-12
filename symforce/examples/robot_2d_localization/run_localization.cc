@@ -94,6 +94,10 @@ void RunLocalization() {
   SYM_ASSERT(sym::IsClose(expected_p0, values.At<sym::Pose2d>({'P', 0}), 1e-6));
   SYM_ASSERT(sym::IsClose(expected_p1, values.At<sym::Pose2d>({'P', 1}), 1e-6));
   SYM_ASSERT(sym::IsClose(expected_p2, values.At<sym::Pose2d>({'P', 2}), 1e-6));
+
+  spdlog::info("Iterations: {}", stats.best_index);
+  spdlog::info("Final error: {:.12f}", best_iter.new_error);
+  spdlog::info("Status: SUCCESS");
 }
 
 }  // namespace robot_2d_localization

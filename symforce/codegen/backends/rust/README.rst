@@ -1,3 +1,10 @@
 ***THIS MODULE IS EXPERIMENTAL***
 
-Backend for Rust. This currently only supports vector/matrices inputs and outputs, we do not have geo or cam types for Rust yet.
+Backend for Rust. The default ``nalgebra`` target supports vector and matrix
+inputs and outputs. The ``stack-algebra`` target additionally supports the
+geometry package (``Rot2``, ``Pose2``, ``Rot3``, ``Pose3``, and
+``LinearCameraCal`` and ``ATANCameraCal``).  The runtime also provides a generic
+``CameraCal`` trait
+and ``PosedCamera`` wrapper, provided by the unified ``symforce-rust`` crate;
+full camera package generation for additional calibration models is not
+implemented yet.

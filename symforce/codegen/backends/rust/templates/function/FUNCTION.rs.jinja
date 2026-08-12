@@ -8,10 +8,26 @@
 
 pub mod {{ spec.namespace }} {
 
-#[allow(unused_parens)]
+#![allow(
+    unused_parens,
+    non_snake_case,
+    clippy::double_parens,
+    clippy::empty_line_after_doc_comments,
+    clippy::too_many_arguments,
+    clippy::unused_unit,
+    unused_variables,
+)]
+
+{% if spec.config.algebra.name == "STACK_ALGEBRA" %}
+#[allow(unused_imports)]
+use stack_algebra::Float;
+{% endif %}
 
 {% if spec.docstring %}
 {{ util.print_docstring(spec.docstring) }}
+{% endif %}
+{% if spec.config.inline %}
+#[inline(always)]
 {% endif %}
 {{ util.function_declaration(spec) }} {
     {{ util.expr_code(spec) }}

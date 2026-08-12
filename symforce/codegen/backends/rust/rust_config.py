@@ -3,6 +3,7 @@
 # This source code is under the Apache 2.0 license found in the LICENSE file.
 # ----------------------------------------------------------------------------
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from sympy.printing.codeprinter import CodePrinter
@@ -12,6 +13,20 @@ from symforce.codegen.backends.rust import rust_code_printer
 from symforce.codegen.codegen_config import CodegenConfig
 
 CURRENT_DIR = Path(__file__).parent
+
+
+class RustAlgebra(str, Enum):
+    """Matrix runtime used by generated Rust functions."""
+
+    NALGEBRA = "nalgebra"
+    STACK_ALGEBRA = "stack-algebra"
+
+    @property
+    def crate_name(self) -> str:
+        """Return the Rust crate identifier used in generated source."""
+        if self is RustAlgebra.STACK_ALGEBRA:
+            return "stack_algebra"
+        return "nalgebra"
 
 
 @dataclass
@@ -30,12 +45,25 @@ class RustConfig(CodegenConfig):
         zero_epsilon_behavior: What should codegen do if a default epsilon is not set?
         normalize_results: Should function outputs be explicitly projected onto the manifold before
                            returning?
+        geo_types: Geometry types to expose when generating a Rust geo package.
+        geometry_crate: Crate providing generated geometry runtime types.
+        inline: Emit ``#[inline(always)]`` for generated functions when they are performance-critical
+            and called from a hot path.
     """
 
     doc_comment_line_prefix: str = "///"
     line_length: int = 100
     scalar_type: rust_code_printer.ScalarType = rust_code_printer.ScalarType.DOUBLE
     use_eigen_types: bool = False
+    algebra: RustAlgebra = RustAlgebra.NALGEBRA
+    geo_types: T.Tuple[str, ...] = ("Rot2", "Pose2")
+    geometry_crate: str = "symforce-rust"
+    inline: bool = False
+
+    @property
+    def geometry_crate_name(self) -> str:
+        """Return the Rust module identifier for the geometry crate."""
+        return self.geometry_crate.replace("-", "_")
 
     @classmethod
     def backend_name(cls) -> str:

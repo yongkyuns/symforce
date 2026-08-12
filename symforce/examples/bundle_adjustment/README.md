@@ -16,3 +16,12 @@ Utilities for building up the problem, by randomly sampling camera poses and fea
 ### `run_bundle_adjustment.cc`
 
 This is the C++ file that actually runs the optimization.  It builds up the `Values` for the problem, builds a factor graph, and performs bundle adjustment.  See the comments there for more information.
+
+### `rust/`
+
+The Rust + stack-algebra port uses the same two-view, twenty-landmark dataset exported from the
+C++ `BuildValues` implementation. It generates the symbolic residuals into Rust and runs the same
+bounded optimizer. The shared SymForce reprojection residual is generated for both backends, with C++/Rust
+residual and Jacobian parity coverage in
+`test/symforce_examples_bundle_adjustment_rust_codegen_test.py`; see `rust/README.md` for the
+numeric parity result and limitations.

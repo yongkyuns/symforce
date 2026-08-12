@@ -27,3 +27,32 @@ Defines the symbolic residual function for the reprojection error factor, and a 
 
 This is the C++ file that actually runs the optimization.  It loads a dataset, builds a factor graph,
 and performs bundle adjustment.  See the comments there for more information.
+
+### Rust + stack-algebra port
+
+The Rust port reads the same BAL text format and uses the same generated Snavely reprojection
+factor. For the complete 49-camera ladybug problem it uses a fixed-size Schur-complement solver:
+the camera system is a compile-time `441 x 441` matrix, each landmark is solved from a fixed
+`3 x 3` block, and no runtime sparse matrix is required. This keeps the numerical result within
+the C++ reference tolerance while reducing the working set and runtime:
+
+```bash
+PYTHONPATH=. .venv/bin/python symforce/examples/bundle_adjustment_in_the_large/generate_rust.py
+cargo run --release --manifest-path symforce/examples/bundle_adjustment_in_the_large/rust/Cargo.toml \\
+  -- symforce/examples/bundle_adjustment_in_the_large/data/ladybug/problem-49-7776-pre.txt
+```
+
+Passing camera and point limits selects the generic dynamic optimizer for a smaller subset, which
+is useful for quick factor-level checks.
+
+After building the C++ example, compare both implementations directly:
+
+```bash
+PYTHONPATH=. .venv/bin/python symforce/examples/bal_parity.py \\
+  symforce/examples/bundle_adjustment_in_the_large/data/ladybug/problem-49-7776-pre.txt
+```
+
+Download a dataset first with `download_dataset.py ladybug`, or download an individual BAL problem
+file. The optional arguments select the number of leading cameras and points; observations are
+kept only when both endpoints are in the selected subset. The C++ executable accepts the same
+limits for subset parity checks.

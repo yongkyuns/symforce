@@ -1,0 +1,24 @@
+[package]
+name = "symforce-rust"
+version = "0.1.0"
+edition = "2021"
+description = "SymForce geometry, generated-factor, and optimization runtime for Rust"
+license = "Apache-2.0"
+
+[features]
+default = ["std", "opt", "imu"]
+std = ["stack-algebra/std"]
+opt = ["std"]
+imu = []
+
+[dependencies]
+stack-algebra = { git = "https://github.com/yongkyuns/stack-algebra.git", rev = "cb242f9" }
+
+# Keep release builds focused on generated-kernel throughput.  The IMU kernels are large and
+# benefit substantially from cross-codegen-unit inlining and ThinLTO.
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(optimizations_enabled)'] }

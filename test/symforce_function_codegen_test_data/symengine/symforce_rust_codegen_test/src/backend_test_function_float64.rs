@@ -82,9 +82,9 @@ pub mod sym {
 
         // Intermediate terms (5)
         let _tmp0: f64 = 2_f64.ln();
-        let _tmp1: f64 = core::f64::consts::PI.powf((-1_f64 / 1_f64));
-        let _tmp2: f64 = 2_f64.powf((1_f64 / 2_f64));
-        let _tmp3: f64 = x.powf((1_f64 / 2_f64));
+        let _tmp1: f64 = 1.0 / (core::f64::consts::PI);
+        let _tmp2: f64 = 2_f64.sqrt();
+        let _tmp3: f64 = x.sqrt();
         let _tmp4: f64 = x + y;
 
         // Output terms (56)
@@ -113,7 +113,7 @@ pub mod sym {
         }
 
         if let Some(res6) = res6 {
-            *res6 = _tmp0.powf((-1_f64 / 1_f64));
+            *res6 = 1.0 / (_tmp0);
         }
 
         if let Some(res7) = res7 {
@@ -145,7 +145,7 @@ pub mod sym {
         }
 
         if let Some(res14) = res14 {
-            *res14 = 2_f64 / core::f64::consts::PI.powf((1_f64 / 2_f64));
+            *res14 = 2_f64 / core::f64::consts::PI.sqrt();
         }
 
         if let Some(res15) = res15 {
@@ -241,11 +241,11 @@ pub mod sym {
         }
 
         if let Some(res38) = res38 {
-            *res38 = x.powf((2_f64 / 1_f64));
+            *res38 = (x * x);
         }
 
         if let Some(res39) = res39 {
-            *res39 = x.powf((3_f64 / 1_f64));
+            *res39 = (x * x * x);
         }
 
         if let Some(res40) = res40 {
@@ -261,7 +261,7 @@ pub mod sym {
         }
 
         if let Some(res43) = res43 {
-            *res43 = x.powf((3_f64 / 2_f64));
+            *res43 = (x * x.sqrt());
         }
 
         if let Some(res44) = res44 {
@@ -302,11 +302,11 @@ pub mod sym {
         }
 
         if let Some(res53) = res53 {
-            *res53 = _tmp4.powf((2_f64 / 1_f64));
+            *res53 = (_tmp4 * _tmp4);
         }
 
         if let Some(res54) = res54 {
-            *res54 = _tmp4.powf((3_f64 / 1_f64));
+            *res54 = (_tmp4 * _tmp4 * _tmp4);
         }
 
         if let Some(res55) = res55 {

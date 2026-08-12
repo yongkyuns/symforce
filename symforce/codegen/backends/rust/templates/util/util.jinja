@@ -21,11 +21,19 @@
 
 {%- macro format_vector(T, name, spec) -%}
     {% set size = T.SHAPE[0] * T.SHAPE[1] %}
+    {% if spec.config.algebra.name == "STACK_ALGEBRA" -%}
+    stack_algebra::Matrix<{{ size }}, 1, {{ format_scalar(spec) }}>
+    {%- else -%}
     nalgebra::SVector::<{{ format_scalar(spec) }}, {{ size }}>
+    {%- endif %}
 {%- endmacro -%}
 
 {%- macro format_matrix(T, name, spec) -%}
+    {% if spec.config.algebra.name == "STACK_ALGEBRA" -%}
+    stack_algebra::Matrix<{{ T.SHAPE[0] }}, {{ T.SHAPE[1] }}, {{ format_scalar(spec) }}>
+    {%- else -%}
     nalgebra::SMatrix::<{{ format_scalar(spec) }}, {{ T.SHAPE[0] }}, {{ T.SHAPE[1] }}>
+    {%- endif %}
 {%- endmacro -%}
 
 {%- macro format_typename(name, type, spec) -%}
@@ -39,6 +47,18 @@
             {% else %}
                 {{ format_matrix(T, name, spec) }}
             {% endif %}
+        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Rot2" %}
+            {{ spec.config.geometry_crate_name }}::Rot2<{{ format_scalar(spec) }}>
+        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Pose2" %}
+            {{ spec.config.geometry_crate_name }}::Pose2<{{ format_scalar(spec) }}>
+        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Rot3" %}
+            {{ spec.config.geometry_crate_name }}::Rot3<{{ format_scalar(spec) }}>
+        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Pose3" %}
+            {{ spec.config.geometry_crate_name }}::Pose3<{{ format_scalar(spec) }}>
+        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "LinearCameraCal" %}
+            {{ spec.config.geometry_crate_name }}::LinearCameraCal<{{ format_scalar(spec) }}>
+        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "ATANCameraCal" %}
+            {{ spec.config.geometry_crate_name }}::ATANCameraCal<{{ format_scalar(spec) }}>
         {% else %}
             {{ raise("Unsupported type {} for value {}".format(T, name)) }}
         {% endif %}
@@ -99,7 +119,7 @@
      {{ name }}: {{ format_scalar(spec) }}
     {% elif issubclass(T, Matrix) %}
         {{ name }}: &{{ format_typename(name, T_or_value, spec) }}
-    {% elif issubclass(T, Matrix) -%}
+    {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal") -%}
         {{ name }}: &{{ format_typename(name, T_or_value, spec) }}
     {%- else -%}
         {{ raise('Unsupported type {} for input "{}"'.format(T, name)) }}
@@ -188,7 +208,15 @@
 
         {% set T = typing_util.get_type(type) %}
         {% if issubclass(T, Matrix) %}
+        {% if spec.config.algebra.name == "STACK_ALGEBRA" %}
+        {% if T.SHAPE[0] == 1 or T.SHAPE[1] == 1 %}
+        *{{ name }} = stack_algebra::Matrix::<{{ T.SHAPE[0] * T.SHAPE[1] }}, 1, {{ format_scalar(spec) }}>::zeros();
+        {% else %}
+        *{{ name }} = stack_algebra::Matrix::<{{ T.SHAPE[0] }}, {{ T.SHAPE[1] }}, {{ format_scalar(spec) }}>::zeros();
+        {% endif %}
+        {% else %}
         *{{ name }} = {{ format_typename(name, type, spec) }}::zeros();
+        {% endif %}
         {% endif %}
         {{ format_output(name, type, terms, spec) | indent(width=8) | trim }}
     }
@@ -209,6 +237,14 @@
  #}
 {% macro expr_code(spec) -%}
     // Total ops: {{ spec.total_ops() }}
+
+    {% for name, type in spec.inputs.items() %}
+    {% set input_type = typing_util.get_type(type) %}
+    {% if input_type.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal") %}
+    // Input storage for geometry values
+    let _{{ name }} = {{ name }}.data();
+    {% endif %}
+    {% endfor %}
 
     {% if spec.unused_arguments %}
     // Unused inputs
@@ -232,11 +268,19 @@
             {{ terms[0][1] }};
             {% elif issubclass(T_return, Matrix) %}
                 {% set size = T_return.SHAPE[0] * T_return.SHAPE[1] %}
+                {% if spec.config.algebra.name == "STACK_ALGEBRA" %}
+                stack_algebra::Matrix::<{{ T_return.SHAPE[0] }}, {{ T_return.SHAPE[1] }}, {{ format_scalar(spec) }}>::from_rows([
+                {% for lhs, rhs in terms %}
+                    [{{ rhs }}]{% if not loop.last %},{% endif %}
+                {% endfor %}
+                ])
+                {% else %}
                 {{ format_vector(T_return, name, spec) }}::new(
                 {% for lhs, rhs in terms %}
         {{ rhs }}{% if not loop.last %},{% endif %}
                 {% endfor %}
     )
+                {% endif %}
             {% else %}
             {{ raise("Cannot return an output of type {}: The Rust backend only supports returning scalars, vectors, and matrices.".format(T_return)) }}
             {% endif %}

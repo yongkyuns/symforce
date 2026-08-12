@@ -173,3 +173,33 @@ target_link_libraries(
 set_target_properties(robot_3d_localization_benchmark
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/benchmarks
 )
+
+# -----------------------------------------------------------------------------
+
+add_executable(
+    imu_preintegration_benchmark
+    imu_preintegration/imu_preintegration_benchmark.cc
+)
+
+target_link_libraries(
+    imu_preintegration_benchmark
+    symforce_slam
+)
+
+set_target_properties(imu_preintegration_benchmark
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/benchmarks
+)
+
+add_executable(
+    imu_preintegration_parity
+    imu_preintegration/imu_preintegration_parity.cc
+)
+
+target_link_libraries(
+    imu_preintegration_parity
+    symforce_slam
+)
+
+set_target_properties(imu_preintegration_parity
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/benchmarks
+)

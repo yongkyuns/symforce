@@ -1,0 +1,8 @@
+[package]
+name = "symforce-robot-3d-localization"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stack-algebra = { git = "https://github.com/yongkyuns/stack-algebra.git", rev = "cb242f9" }
+symforce-rust = { path = "../../../../rust/symforce" }

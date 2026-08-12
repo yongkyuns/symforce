@@ -8,6 +8,7 @@ from enum import Enum
 import sympy
 from sympy.codegen.ast import float32
 from sympy.codegen.ast import float64
+from sympy.printing.codeprinter import CodePrinter
 from sympy.printing.rust import RustCodePrinter as SympyRustCodePrinter
 from sympy.printing.rust import known_functions as sympy_known_functions
 
@@ -65,11 +66,17 @@ class RustCodePrinter(SympyRustCodePrinter):
         # add it here instead so we can just call `doprint` and get the correct behavior.
         # See https://github.com/sympy/sympy/pull/26882
         def doprint(self, expr: T.Any, assign_to: T.Any = None) -> str:
-            expr = self._rewrite_known_functions(expr)  # type: ignore[attr-defined]
-            if isinstance(expr, sympy.Expr):
-                for src_func, dst_func in self.function_overrides.values():  # type: ignore[attr-defined]
-                    expr = expr.replace(src_func, dst_func)
-            return super().doprint(expr, assign_to)
+            # SymPy's Rust printer rewrites Mod into a floor expression before dispatching to
+            # _print_Mod. Preserve Mod so floating-point wrap_angle uses rem_euclid instead.
+            if not isinstance(expr, sympy.Expr):
+                return super().doprint(expr, assign_to)
+            if not expr.has(sympy.Mod):
+                expr = self._rewrite_known_functions(expr)  # type: ignore[attr-defined]
+                if isinstance(expr, sympy.Expr):
+                    for src_func, dst_func in self.function_overrides.values():  # type: ignore[attr-defined]
+                        expr = expr.replace(src_func, dst_func)
+                return super().doprint(expr, assign_to)
+            return self._print(expr)
 
     @staticmethod
     def _print_Zero(expr: sympy.Expr) -> str:
@@ -88,11 +95,47 @@ class RustCodePrinter(SympyRustCodePrinter):
             return f"{expr.p}_f64"
         assert False, f"Scalar type {self.scalar_type} not supported"
 
+    def _print_Mul(self, expr: sympy.Expr) -> str:
+        """Print multiplication without SymPy Rust's unsafe float-casting rewrite.
+
+        SymPy's Rust printer casts additive operands before delegating to its
+        multiplication printer. That rewrite can turn ``(a + b) / s`` into
+        ``a + b * s.powf(-1)``. The SymForce scalar printers already emit
+        correctly typed literals, so the generic code printer is both safe and
+        sufficient here.
+        """
+        return CodePrinter._print_Mul(self, expr)
+
+    def _print_Add(self, expr: sympy.Expr, order: T.Any = None) -> str:
+        """Print addition using the generic precedence-aware printer."""
+        return CodePrinter._print_Add(self, expr, order)
+
     def _print_Pow(self, expr: T.Any, rational: T.Any = None) -> str:
+        # Parenthesize the base because Rust method-call syntax binds more
+        # tightly than addition and multiplication.
+        base = self._print(expr.base)
+        if not expr.base.is_Atom:
+            base = f"({base})"
+
+        # Match the C++ backend's cheap forms.  Generated geometry and IMU
+        # kernels contain many integer squares; routing those through powf is
+        # needlessly expensive, especially for f32.  These rewrites preserve
+        # the intended real-valued algebra while avoiding a libm call.
+        if expr.exp == -1:
+            return f"1.0 / ({base})"
+        if expr.exp == 2:
+            return f"({base} * {base})"
+        if expr.exp == 3:
+            return f"({base} * {base} * {base})"
+        if expr.exp == sympy.S.One / 2:
+            return f"{base}.sqrt()"
+        if expr.exp == sympy.S(3) / 2:
+            return f"({base} * {base}.sqrt())"
+
         if expr.exp.is_rational:
             power = self._print_Rational(expr.exp)
             func = "powf"
-            return f"{self._print(expr.base)}.{func}({power})"
+            return f"{base}.{func}({power})"
         else:
             power = self._print(expr.exp)
 
@@ -101,7 +144,7 @@ class RustCodePrinter(SympyRustCodePrinter):
         else:
             func = "powf"
 
-        return f"{expr.base}.{func}({power})"
+        return f"{base}.{func}({power})"
 
     @staticmethod
     def _print_ImaginaryUnit(expr: sympy.Expr) -> str:
@@ -145,6 +188,19 @@ class RustCodePrinter(SympyRustCodePrinter):
             * The first argument calls the min method on the second argument.
         """
         return "{}.min({})".format(self._print(expr.args[0]), self._print(expr.args[1]))
+
+    def _print_Mod(self, expr: sympy.Mod) -> str:
+        """Print floating-point modulo with Rust's non-negative remainder semantics."""
+        dividend, divisor = expr.args
+        return "({}).rem_euclid({})".format(self._print(dividend), self._print(divisor))
+
+    def _print_floor(self, expr: sympy.Function) -> str:
+        """Print the floor function using Rust's floating-point method."""
+        return f"({self._print(expr.args[0])}).floor()"
+
+    def _print_ceiling(self, expr: sympy.Function) -> str:
+        """Print the ceiling function using Rust's floating-point method."""
+        return f"({self._print(expr.args[0])}).ceil()"
 
     def _print_log(self, expr: sympy.log) -> str:
         """

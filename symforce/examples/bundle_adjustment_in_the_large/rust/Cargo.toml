@@ -1,0 +1,12 @@
+[package]
+name = "symforce-bundle-adjustment-in-the-large"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stack-algebra = { git = "https://github.com/yongkyuns/stack-algebra.git", rev = "cb242f9" }
+symforce-rust = { path = "../../../../rust/symforce" }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"

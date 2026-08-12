@@ -18,6 +18,8 @@ from symforce.codegen import CodegenConfig
 from symforce.codegen import CppConfig
 from symforce.codegen import PythonConfig
 from symforce.codegen import codegen_util
+from symforce.codegen.backends.rust.rust_config import RustAlgebra
+from symforce.codegen.backends.rust.rust_config import RustConfig
 from symforce.codegen import lcm_types_codegen
 from symforce.codegen import template_util
 from symforce.codegen.ops_codegen_util import make_group_ops_funcs
@@ -386,6 +388,42 @@ def generate(config: CodegenConfig, output_dir: T.Optional[Path] = None) -> Path
             config=config.render_template_config,
             output_path=package_dir / "all_geo_types.h",
         )
+    elif isinstance(config, RustConfig):
+        if config.algebra is not RustAlgebra.STACK_ALGEBRA:
+            raise NotImplementedError(
+                "Rust geo-package generation currently requires the stack-algebra runtime"
+            )
+
+        requested_types = tuple(getattr(sf, name) for name in config.geo_types)
+        supported_types = (
+            sf.Rot2,
+            sf.Pose2,
+            sf.Rot3,
+            sf.Pose3,
+            sf.LinearCameraCal,
+            sf.ATANCameraCal,
+        )
+        unsupported_types = tuple(cls for cls in requested_types if cls not in supported_types)
+        if unsupported_types:
+            unsupported_names = ", ".join(cls.__name__ for cls in unsupported_types)
+            raise NotImplementedError(
+                f"Rust geo-package generation does not yet support: {unsupported_names}"
+            )
+
+        logger.debug(f'Creating Rust package at: "{package_dir}"')
+        templates.add(
+            template_path=Path("geo_package", "mod.rs.jinja"),
+            data={"geo_types": requested_types},
+            config=config.render_template_config,
+            output_path=package_dir / "mod.rs",
+        )
+        for cls in requested_types:
+            templates.add(
+                template_path=Path("geo_package", f"{cls.__name__.lower()}.rs.jinja"),
+                data={"cls": cls},
+                config=config.render_template_config,
+                output_path=package_dir / f"{cls.__name__.lower()}.rs",
+            )
     else:
         raise NotImplementedError(f'Unknown config type: "{config}"')
 

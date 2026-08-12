@@ -604,6 +604,18 @@ make install
 
 SymForce does not currently integrate with CMake's `find_package` (see [#209](https://github.com/symforce-org/symforce/issues/209)), so if you do this you currently need to add its libraries as link dependencies in your CMake project manually.
 
+## Validate C++/Rust examples
+
+After configuring and building with CMake, run the cross-language parity check from the repository
+root:
+
+```bash
+PYTHONPATH=. .venv/bin/python symforce/examples/rust_parity.py
+```
+
+It runs the 2D localization, 3D localization, runtime bundle-adjustment, and fixed-size
+bundle-adjustment examples and compares their final errors, iteration counts, and optimized poses.
+
 ## Verify your installation
 ```python
 >>> import symforce
