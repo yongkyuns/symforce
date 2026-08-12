@@ -5,11 +5,11 @@
 
 """Compile a generated Rust function against the local stack-algebra crate."""
 
-from pathlib import Path
 import shutil
 import subprocess
 import textwrap
 import unittest
+from pathlib import Path
 
 import symforce
 
@@ -77,32 +77,42 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
 
     def test_mod_uses_nonnegative_rust_remainder(self) -> None:
         x = sf.Symbol("x")
-        generated = RustConfig(
-            scalar_type=ScalarType.DOUBLE,
-            algebra=RustAlgebra.STACK_ALGEBRA,
-        ).printer().doprint(sf.Mod(x, 2 * sf.pi))
+        generated = (
+            RustConfig(
+                scalar_type=ScalarType.DOUBLE,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            )
+            .printer()
+            .doprint(sf.Mod(x, 2 * sf.pi))
+        )
         self.assertIn("rem_euclid", generated)
 
     def test_pow_parenthesizes_composite_base(self) -> None:
         x, y = sf.Symbol("x"), sf.Symbol("y")
-        generated = RustConfig(
-            scalar_type=ScalarType.DOUBLE,
-            algebra=RustAlgebra.STACK_ALGEBRA,
-        ).printer().doprint((x + y) ** -1)
+        generated = (
+            RustConfig(
+                scalar_type=ScalarType.DOUBLE,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            )
+            .printer()
+            .doprint((x + y) ** -1)
+        )
         self.assertIn("1.0 / ((x + y))", generated)
 
     def test_mul_parenthesizes_composite_factor(self) -> None:
         x, y, scale = sf.Symbol("x"), sf.Symbol("y"), sf.Symbol("scale")
-        generated = RustConfig(
-            scalar_type=ScalarType.DOUBLE,
-            algebra=RustAlgebra.STACK_ALGEBRA,
-        ).printer().doprint((x + y) / scale)
+        generated = (
+            RustConfig(
+                scalar_type=ScalarType.DOUBLE,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            )
+            .printer()
+            .doprint((x + y) / scale)
+        )
         self.assertIn("(x + y)/scale", generated)
 
     def test_atan_camera_expression_matches_cpp(self) -> None:
-        def project(
-            point: sf.V3, calibration: sf.ATANCameraCal, epsilon: sf.Scalar
-        ) -> sf.V2:
+        def project(point: sf.V3, calibration: sf.ATANCameraCal, epsilon: sf.Scalar) -> sf.V2:
             pixel, _ = calibration.pixel_from_camera_point(point, epsilon)
             return pixel
 
@@ -116,6 +126,8 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
             ),
             input_types=input_types,
         )
+        assert cpp.return_key is not None
+        assert rust.return_key is not None
         self.assertEqual(
             ops.StorageOps.to_storage(cpp.outputs[cpp.return_key]),
             ops.StorageOps.to_storage(rust.outputs[rust.return_key]),
@@ -162,9 +174,8 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
             + "\n"
         )
         (output_dir / "src").mkdir()
-        def atan_project(
-            point: sf.V3, calibration: sf.ATANCameraCal, epsilon: sf.Scalar
-        ) -> sf.V2:
+
+        def atan_project(point: sf.V3, calibration: sf.ATANCameraCal, epsilon: sf.Scalar) -> sf.V2:
             pixel, _ = calibration.pixel_from_camera_point(point, epsilon)
             return pixel
 

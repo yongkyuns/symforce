@@ -19,7 +19,6 @@ from symforce.examples.bundle_adjustment_fixed_size.generate_fixed_problem impor
     FixedBundleAdjustmentProblem,
 )
 
-
 NUM_VIEWS = 2
 NUM_LANDMARKS = 20
 
@@ -37,7 +36,7 @@ def main() -> None:
         + (NUM_VIEWS - 1) * NUM_LANDMARKS
     )
 
-    assert len(problem._optimized_keys()) == (NUM_VIEWS - 1) + NUM_LANDMARKS
+    assert len(problem._optimized_keys()) == (NUM_VIEWS - 1) + NUM_LANDMARKS  # noqa: SLF001
     assert residual_dim == 72
 
     output_path = Path(__file__).parent / "rust" / "src" / "generated" / "global_factor.rs"

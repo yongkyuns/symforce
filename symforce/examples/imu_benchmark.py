@@ -3,7 +3,8 @@
 # This source code is licensed under the Apache 2.0 license found in the LICENSE file.
 # ----------------------------------------------------------------------------
 
-"""Compare the native C++/Eigen and Rust/stack-algebra IMU benchmarks.
+"""
+Compare the native C++/Eigen and Rust/stack-algebra IMU benchmarks.
 
 The C++ executable must already have been built with the desired compiler flags.  For a native
 comparison, build it with ``-march=native`` and pass ``--native`` so Cargo uses the matching Rust
@@ -22,7 +23,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
-
 
 METRIC_RE = re.compile(r"(?P<name>[a-z][a-z0-9_]*)=(?P<value>[-+0-9.eE]+)")
 
@@ -61,7 +61,9 @@ def run(command: list[str], root: Path, env: dict[str, str] | None = None) -> st
 
 
 def parse_metrics(output: str, prefix: str) -> Metrics:
-    values = {match.group("name"): float(match.group("value")) for match in METRIC_RE.finditer(output)}
+    values = {
+        match.group("name"): float(match.group("value")) for match in METRIC_RE.finditer(output)
+    }
 
     def value(suffix: str) -> float:
         key = f"{prefix}_{suffix}"
@@ -165,7 +167,9 @@ def main() -> int:
     build_dir = args.build_dir if args.build_dir.is_absolute() else root / args.build_dir
     cpp_binary = args.cpp_binary or Path("bin/benchmarks/imu_preintegration_benchmark")
     cpp_binary = cpp_binary if cpp_binary.is_absolute() else build_dir / cpp_binary
-    rust_manifest = args.rust_manifest if args.rust_manifest.is_absolute() else root / args.rust_manifest
+    rust_manifest = (
+        args.rust_manifest if args.rust_manifest.is_absolute() else root / args.rust_manifest
+    )
 
     if not cpp_binary.is_file():
         raise RuntimeError(

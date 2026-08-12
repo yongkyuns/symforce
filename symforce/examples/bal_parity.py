@@ -12,7 +12,6 @@ import re
 import subprocess
 from pathlib import Path
 
-
 FINAL_ERROR = re.compile(r"final error:\s*([-+0-9.eE]+)", re.IGNORECASE)
 ITERATIONS = re.compile(r"iterations:\s*(\d+)", re.IGNORECASE)
 
@@ -45,11 +44,7 @@ def main() -> None:
     dataset = args.dataset if args.dataset.is_absolute() else root / args.dataset
     if (args.max_cameras is None) != (args.max_points is None):
         parser.error("--max-cameras and --max-points must be supplied together")
-    limits = (
-        []
-        if args.max_cameras is None
-        else [str(args.max_cameras), str(args.max_points)]
-    )
+    limits = [] if args.max_cameras is None else [str(args.max_cameras), str(args.max_points)]
 
     cpp = run(
         [
@@ -82,10 +77,7 @@ def main() -> None:
     error_tolerance = 5e-6 * max(1.0, abs(cpp_metrics[0]))
     if abs(cpp_metrics[0] - rust_metrics[0]) > error_tolerance or cpp_metrics[1] != rust_metrics[1]:
         raise RuntimeError(f"BAL mismatch: C++={cpp_metrics}, Rust={rust_metrics}")
-    print(
-        f"BAL problem: error={rust_metrics[0]:.12f}, "
-        f"iterations={rust_metrics[1]}, parity=PASS"
-    )
+    print(f"BAL problem: error={rust_metrics[0]:.12f}, iterations={rust_metrics[1]}, parity=PASS")
 
 
 if __name__ == "__main__":

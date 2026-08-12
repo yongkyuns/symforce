@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import symforce
 
@@ -20,12 +21,11 @@ except symforce.AlreadyUsedEpsilon:
 
 import symforce.symbolic as sf
 from symforce import codegen
-from symforce.codegen.backends.rust import RustAlgebra, RustConfig, ScalarType
-from symforce.slam.imu_preintegration.manifold_symbolic import (
-    imu_manifold_preintegration_update,
-    roll_forward_state,
-)
-
+from symforce.codegen.backends.rust import RustAlgebra
+from symforce.codegen.backends.rust import RustConfig
+from symforce.codegen.backends.rust import ScalarType
+from symforce.slam.imu_preintegration.manifold_symbolic import imu_manifold_preintegration_update
+from symforce.slam.imu_preintegration.manifold_symbolic import roll_forward_state
 
 OUTPUT_NAMES = [
     "new_DR",
@@ -40,7 +40,7 @@ OUTPUT_NAMES = [
 ]
 
 
-def imu_manifold_preintegration_update_storage(
+def imu_manifold_preintegration_update_storage(  # noqa: PLR0913, PLR0917
     DR: sf.Rot3,
     Dv: sf.V3,
     Dp: sf.V3,
@@ -80,7 +80,7 @@ def imu_manifold_preintegration_update_storage(
         epsilon,
         use_handwritten_derivatives=True,
     )
-    return (outputs[0].to_storage(), *outputs[1:])
+    return (cast(sf.V4, outputs[0].to_storage()), *outputs[1:])
 
 
 def roll_forward_state_storage(
@@ -94,17 +94,12 @@ def roll_forward_state_storage(
 ) -> tuple[sf.V7, sf.V3]:
     """Rust-compatible storage-vector wrapper for the generated roll-forward function."""
     pose_j, vel_j = roll_forward_state(pose_i, vel_i, DR, Dv, Dp, gravity, dt)
-    return pose_j.to_storage(), vel_j
+    return cast(sf.V7, pose_j.to_storage()), vel_j
 
 
 def main() -> None:
     output_dir = (
-        Path(__file__).resolve().parents[3]
-        / "rust"
-        / "symforce"
-        / "src"
-        / "imu"
-        / "generated"
+        Path(__file__).resolve().parents[3] / "rust" / "symforce" / "src" / "imu" / "generated"
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     config = RustConfig(
@@ -125,9 +120,8 @@ def main() -> None:
         roll_forward_state_storage,
         name="roll_forward_state",
         config=config,
-    ).generate_function(
-        output_dir, skip_directory_nesting=True
-    )
+    ).generate_function(output_dir, skip_directory_nesting=True)
+
 
 if __name__ == "__main__":
     main()

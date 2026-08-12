@@ -10,15 +10,16 @@ from pathlib import Path
 import symforce
 
 symforce.set_symbolic_api("sympy")
-from symforce.examples.robot_3d_localization.robot_3d_localization import NUM_POSES, build_values
-from symforce.examples.robot_3d_localization.residuals import matching_residual
-from symforce.examples.robot_3d_localization.residuals import odometry_residual
 from symforce.codegen import Codegen
+from symforce.codegen import RenderTemplateConfig
+from symforce.codegen import template_util
 from symforce.codegen.backends.rust import RustAlgebra
 from symforce.codegen.backends.rust import RustConfig
 from symforce.codegen.backends.rust import ScalarType
-from symforce.codegen import RenderTemplateConfig
-from symforce.codegen import template_util
+from symforce.examples.robot_3d_localization.residuals import matching_residual
+from symforce.examples.robot_3d_localization.residuals import odometry_residual
+from symforce.examples.robot_3d_localization.robot_3d_localization import NUM_POSES
+from symforce.examples.robot_3d_localization.robot_3d_localization import build_values
 
 
 def main() -> None:
@@ -29,16 +30,12 @@ def main() -> None:
         algebra=RustAlgebra.STACK_ALGEBRA,
     )
 
-    Codegen.function(
-        matching_residual, config=config, name="matching_factor"
-    ).with_linearization(which_args=["world_T_body"]).generate_function(
-        output_dir, skip_directory_nesting=True
-    )
-    Codegen.function(
-        odometry_residual, config=config, name="odometry_factor"
-    ).with_linearization(which_args=["world_T_a", "world_T_b"]).generate_function(
-        output_dir, skip_directory_nesting=True
-    )
+    Codegen.function(matching_residual, config=config, name="matching_factor").with_linearization(
+        which_args=["world_T_body"]
+    ).generate_function(output_dir, skip_directory_nesting=True)
+    Codegen.function(odometry_residual, config=config, name="odometry_factor").with_linearization(
+        which_args=["world_T_a", "world_T_b"]
+    ).generate_function(output_dir, skip_directory_nesting=True)
 
     values, num_landmarks = build_values(NUM_POSES)
     template_util.render_template(

@@ -6,7 +6,6 @@
 """Shared symbolic residuals for the 3D localization example."""
 
 import symforce.symbolic as sf
-
 from symforce import typing as T
 
 

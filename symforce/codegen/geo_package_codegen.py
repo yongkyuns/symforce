@@ -18,10 +18,10 @@ from symforce.codegen import CodegenConfig
 from symforce.codegen import CppConfig
 from symforce.codegen import PythonConfig
 from symforce.codegen import codegen_util
-from symforce.codegen.backends.rust.rust_config import RustAlgebra
-from symforce.codegen.backends.rust.rust_config import RustConfig
 from symforce.codegen import lcm_types_codegen
 from symforce.codegen import template_util
+from symforce.codegen.backends.rust.rust_config import RustAlgebra
+from symforce.codegen.backends.rust.rust_config import RustConfig
 from symforce.codegen.ops_codegen_util import make_group_ops_funcs
 from symforce.codegen.ops_codegen_util import make_lie_group_ops_funcs
 from symforce.codegen.ops_codegen_util import make_manifold_ops_funcs
@@ -232,7 +232,7 @@ def _custom_generated_methods(config: CodegenConfig) -> T.Dict[T.Type, T.List[Co
     }
 
 
-def generate(config: CodegenConfig, output_dir: T.Optional[Path] = None) -> Path:
+def generate(config: CodegenConfig, output_dir: T.Optional[Path] = None) -> Path:  # noqa: PLR0915
     """
     Generate the geo package for the given language.
     """

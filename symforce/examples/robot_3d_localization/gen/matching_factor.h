@@ -13,7 +13,7 @@
 namespace sym {
 
 /**
- * Residual from a relative translation mesurement of a 3D pose to a landmark.
+ * Residual from a relative translation measurement of a 3D pose to a landmark.
  *
  * Args:
  *     world_T_body: 3D pose of the robot in the world frame

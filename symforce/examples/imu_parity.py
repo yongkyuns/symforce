@@ -14,7 +14,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 LINE_RE = re.compile(
     r"case=(?P<case>\d+) "
     r"dp0=(?P<dp0>[-+0-9.eE]+) "
@@ -54,8 +53,7 @@ def assert_parity(cpp: dict[int, dict[str, float]], rust: dict[int, dict[str, fl
             rust_value = rust[case][field]
             if not math.isclose(cpp_value, rust_value, rel_tol=2e-10, abs_tol=1e-11):
                 raise RuntimeError(
-                    f"case {case} {field} mismatch: C++={cpp_value:.17g}, "
-                    f"Rust={rust_value:.17g}"
+                    f"case {case} {field} mismatch: C++={cpp_value:.17g}, Rust={rust_value:.17g}"
                 )
 
 
@@ -70,7 +68,9 @@ def main() -> int:
     build_dir = args.build_dir if args.build_dir.is_absolute() else root / args.build_dir
     cpp_binary = args.cpp_binary or Path("bin/benchmarks/imu_preintegration_parity")
     cpp_binary = cpp_binary if cpp_binary.is_absolute() else build_dir / cpp_binary
-    rust_manifest = args.rust_manifest if args.rust_manifest.is_absolute() else root / args.rust_manifest
+    rust_manifest = (
+        args.rust_manifest if args.rust_manifest.is_absolute() else root / args.rust_manifest
+    )
     if not cpp_binary.is_file():
         raise RuntimeError(f"missing C++ parity binary: {cpp_binary}")
 

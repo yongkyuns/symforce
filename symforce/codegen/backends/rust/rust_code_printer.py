@@ -96,7 +96,8 @@ class RustCodePrinter(SympyRustCodePrinter):
         assert False, f"Scalar type {self.scalar_type} not supported"
 
     def _print_Mul(self, expr: sympy.Expr) -> str:
-        """Print multiplication without SymPy Rust's unsafe float-casting rewrite.
+        """
+        Print multiplication without SymPy Rust's unsafe float-casting rewrite.
 
         SymPy's Rust printer casts additive operands before delegating to its
         multiplication printer. That rewrite can turn ``(a + b) / s`` into
@@ -104,11 +105,11 @@ class RustCodePrinter(SympyRustCodePrinter):
         correctly typed literals, so the generic code printer is both safe and
         sufficient here.
         """
-        return CodePrinter._print_Mul(self, expr)
+        return CodePrinter._print_Mul(self, expr)  # noqa: SLF001
 
     def _print_Add(self, expr: sympy.Expr, order: T.Any = None) -> str:
         """Print addition using the generic precedence-aware printer."""
-        return CodePrinter._print_Add(self, expr, order)
+        return CodePrinter._print_Add(self, expr, order)  # noqa: SLF001
 
     def _print_Pow(self, expr: T.Any, rational: T.Any = None) -> str:
         # Parenthesize the base because Rust method-call syntax binds more

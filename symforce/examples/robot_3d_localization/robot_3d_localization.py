@@ -17,17 +17,16 @@ import symforce
 
 symforce.set_epsilon_to_symbol()
 
-import symforce.symbolic as sf
-
 # -----------------------------------------------------------------------------
 # Create initial Values
 # -----------------------------------------------------------------------------
 import numpy as np
 
+import symforce.symbolic as sf
 from symforce import typing as T
-from symforce.values import Values
 from symforce.examples.robot_3d_localization.residuals import matching_residual
 from symforce.examples.robot_3d_localization.residuals import odometry_residual
+from symforce.values import Values
 
 
 def build_values(num_poses: int) -> T.Tuple[Values, int]:
