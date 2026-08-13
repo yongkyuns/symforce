@@ -685,6 +685,110 @@ impl<T: Real + MatrixScalar + ReductionScalar> CameraCal<T> for OrthographicCame
     }
 }
 
+/// An equirectangular camera calibration with storage `(fx, fy, cx, cy)`.
+///
+/// Pixels encode longitude and latitude angles. The forward projection is
+/// valid for every nonzero camera-frame point, while inverse projection is
+/// valid only within the principal longitude/latitude range.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EquirectangularCameraCal<T> {
+    data: Vector<4, T>,
+}
+
+impl<T: Real + MatrixScalar + ReductionScalar> EquirectangularCameraCal<T> {
+    /// Constructs an equirectangular calibration from focal length and principal point.
+    #[inline]
+    pub fn new(focal_length: Vector<2, T>, principal_point: Vector<2, T>) -> Self {
+        Self {
+            data: Vector::from_rows([
+                [focal_length[0]],
+                [focal_length[1]],
+                [principal_point[0]],
+                [principal_point[1]],
+            ]),
+        }
+    }
+
+    /// Constructs an equirectangular calibration from its four-element storage.
+    #[inline]
+    pub fn from_storage(data: Vector<4, T>) -> Self {
+        Self { data }
+    }
+
+    /// Returns the storage representation.
+    #[inline]
+    pub fn data(&self) -> &Vector<4, T> {
+        &self.data
+    }
+
+    /// Returns the focal length `(fx, fy)`.
+    #[inline]
+    pub fn focal_length(&self) -> Vector<2, T> {
+        Vector::from_rows([[self.data[0]], [self.data[1]]])
+    }
+
+    /// Returns the principal point `(cx, cy)`.
+    #[inline]
+    pub fn principal_point(&self) -> Vector<2, T> {
+        Vector::from_rows([[self.data[2]], [self.data[3]]])
+    }
+
+    /// Projects a camera-frame point into longitude/latitude pixels.
+    #[inline]
+    pub fn pixel_from_camera_point(&self, point: &Vector<3, T>, epsilon: T) -> (Vector<2, T>, T) {
+        let cam_xz_norm = (point[0] * point[0] + point[2] * point[2] + epsilon).sqrt();
+        let signed_epsilon = T::one().copysign(point[2]) * epsilon;
+        let longitude = point[0].atan2(point[2] + signed_epsilon);
+        let latitude = point[1].atan2(cam_xz_norm);
+        let pixel = Vector::from_rows([
+            [self.data[0] * longitude + self.data[2]],
+            [self.data[1] * latitude + self.data[3]],
+        ]);
+        let squared_norm = point[0] * point[0] + point[1] * point[1] + point[2] * point[2];
+        let is_valid = if squared_norm > T::zero() {
+            T::one()
+        } else {
+            T::zero()
+        };
+        (pixel, is_valid)
+    }
+
+    /// Backprojects a pixel into a unit camera-frame ray.
+    #[inline]
+    pub fn camera_ray_from_pixel(&self, pixel: &Vector<2, T>, _epsilon: T) -> (Vector<3, T>, T) {
+        let longitude = (pixel[0] - self.data[2]) / self.data[0];
+        let latitude = (pixel[1] - self.data[3]) / self.data[1];
+        let cos_latitude = latitude.cos();
+        let ray = Vector::from_rows([
+            [cos_latitude * longitude.sin()],
+            [latitude.sin()],
+            [cos_latitude * longitude.cos()],
+        ]);
+        let pi = T::from(core::f64::consts::PI).unwrap();
+        let half_pi = pi / (T::one() + T::one());
+        let is_valid = if pi - longitude.abs() > T::zero() && half_pi - latitude.abs() > T::zero() {
+            T::one()
+        } else {
+            T::zero()
+        };
+        (ray, is_valid)
+    }
+}
+
+impl<T: Real + MatrixScalar + ReductionScalar> CameraCal<T> for EquirectangularCameraCal<T> {
+    #[inline]
+    fn pixel_from_camera_point(&self, point: &Vector<3, T>, epsilon: T) -> (Vector<2, T>, T) {
+        self.pixel_from_camera_point(point, epsilon)
+    }
+}
+
+impl<T: Real + MatrixScalar + ReductionScalar> CentralCameraCal<T> for EquirectangularCameraCal<T> {
+    #[inline]
+    fn camera_ray_from_pixel(&self, pixel: &Vector<2, T>, epsilon: T) -> (Vector<3, T>, T) {
+        self.camera_ray_from_pixel(pixel, epsilon)
+    }
+}
+
 /// A camera calibration attached to a pose in the global frame.
 ///
 /// The pose follows SymForce's `global_T_cam` convention: applying the pose

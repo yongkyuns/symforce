@@ -6,8 +6,8 @@ mod geometry2;
 mod geometry3;
 
 pub use camera::{
-    ATANCameraCal, CameraCal, CentralCameraCal, DoubleSphereCameraCal, LinearCameraCal,
-    OrthographicCameraCal, PolynomialCameraCal, PosedCamera, SphericalCameraCal,
+    ATANCameraCal, CameraCal, CentralCameraCal, DoubleSphereCameraCal, EquirectangularCameraCal,
+    LinearCameraCal, OrthographicCameraCal, PolynomialCameraCal, PosedCamera, SphericalCameraCal,
 };
 pub use geometry2::{Pose2, Rot2};
 pub use geometry3::{Pose3, Rot3, Unit3};

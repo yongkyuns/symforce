@@ -14,9 +14,9 @@ extern crate self as symforce_rust;
 pub mod geo;
 
 pub use geo::{
-    ATANCameraCal, CameraCal, CentralCameraCal, DoubleSphereCameraCal, LinearCameraCal,
-    OrthographicCameraCal, PolynomialCameraCal, Pose2, Pose3, PosedCamera, Rot2, Rot3,
-    SphericalCameraCal, Unit3,
+    ATANCameraCal, CameraCal, CentralCameraCal, DoubleSphereCameraCal, EquirectangularCameraCal,
+    LinearCameraCal, OrthographicCameraCal, PolynomialCameraCal, Pose2, Pose3, PosedCamera, Rot2,
+    Rot3, SphericalCameraCal, Unit3,
 };
 
 #[cfg(feature = "imu")]

@@ -1,7 +1,7 @@
 use stack_algebra::{Matrix, Vector};
 use symforce_rust::{
-    ATANCameraCal, DoubleSphereCameraCal, LinearCameraCal, OrthographicCameraCal,
-    PolynomialCameraCal, Pose3, PosedCamera, Rot3, SphericalCameraCal,
+    ATANCameraCal, DoubleSphereCameraCal, EquirectangularCameraCal, LinearCameraCal,
+    OrthographicCameraCal, PolynomialCameraCal, Pose3, PosedCamera, Rot3, SphericalCameraCal,
 };
 
 #[test]
@@ -150,6 +150,33 @@ fn orthographic_camera_cal_matches_symforce_reference_values() {
     let behind = Vector::<3, f64>::from_rows([[0.6], [0.8], [0.0]]);
     let (_, behind_valid) = calibration.pixel_from_camera_point(&behind, 1e-8);
     assert_eq!(behind_valid, 0.0);
+}
+
+#[test]
+fn equirectangular_camera_cal_matches_symforce_reference_values() {
+    let calibration = EquirectangularCameraCal::from_storage(Matrix::<4, 1, f64>::from_rows([
+        [1.0],
+        [2.0],
+        [3.0],
+        [4.0],
+    ]));
+    let point = Vector::<3, f64>::from_rows([[0.6], [0.8], [0.2]]);
+    let (pixel, is_valid) = calibration.pixel_from_camera_point(&point, 1e-8);
+    assert!((pixel[0] - 4.24904575739825).abs() < 1e-12);
+    assert!((pixel[1] - 5.80366449289037).abs() < 1e-12);
+    assert_eq!(is_valid, 1.0);
+
+    let pixel = Vector::<2, f64>::from_rows([[0.6], [0.8]]);
+    let (ray, ray_valid) = calibration.camera_ray_from_pixel(&pixel, 1e-8);
+    let expected = [
+        0.019723202204202806,
+        -0.9995736030415051,
+        0.021531544241776817,
+    ];
+    for index in 0..3 {
+        assert!((ray[index] - expected[index]).abs() < 1e-12);
+    }
+    assert_eq!(ray_valid, 0.0);
 }
 
 #[test]

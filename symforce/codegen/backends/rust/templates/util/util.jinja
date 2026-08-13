@@ -67,6 +67,8 @@
             {{ spec.config.geometry_crate_name }}::SphericalCameraCal<{{ format_scalar(spec) }}>
         {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "OrthographicCameraCal" %}
             {{ spec.config.geometry_crate_name }}::OrthographicCameraCal<{{ format_scalar(spec) }}>
+        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "EquirectangularCameraCal" %}
+            {{ spec.config.geometry_crate_name }}::EquirectangularCameraCal<{{ format_scalar(spec) }}>
         {% else %}
             {{ raise("Unsupported type {} for value {}".format(T, name)) }}
         {% endif %}
@@ -127,7 +129,7 @@
      {{ name }}: {{ format_scalar(spec) }}
     {% elif issubclass(T, Matrix) %}
         {{ name }}: &{{ format_typename(name, T_or_value, spec) }}
-    {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal", "PolynomialCameraCal", "DoubleSphereCameraCal", "SphericalCameraCal", "OrthographicCameraCal") -%}
+    {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal", "PolynomialCameraCal", "DoubleSphereCameraCal", "SphericalCameraCal", "OrthographicCameraCal", "EquirectangularCameraCal") -%}
         {{ name }}: &{{ format_typename(name, T_or_value, spec) }}
     {%- else -%}
         {{ raise('Unsupported type {} for input "{}"'.format(T, name)) }}
@@ -248,7 +250,7 @@
 
     {% for name, type in spec.inputs.items() %}
     {% set input_type = typing_util.get_type(type) %}
-    {% if input_type.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal", "PolynomialCameraCal", "DoubleSphereCameraCal", "SphericalCameraCal", "OrthographicCameraCal") %}
+    {% if input_type.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal", "PolynomialCameraCal", "DoubleSphereCameraCal", "SphericalCameraCal", "OrthographicCameraCal", "EquirectangularCameraCal") %}
     // Input storage for geometry values
     let _{{ name }} = {{ name }}.data();
     {% endif %}
