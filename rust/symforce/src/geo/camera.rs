@@ -426,7 +426,7 @@ impl<T: Real + MatrixScalar + ReductionScalar> DoubleSphereCameraCal<T> {
         let xi_squared = xi * xi;
         let w2_discriminant = w1_squared * xi_squared - xi_squared + T::one();
         let w2 = w1_squared * xi - w1 * (w2_discriminant.max(epsilon.sqrt())).sqrt() - xi;
-        let linear_is_valid = w2_discriminant >= T::zero() || z - w2 * d1 >= T::zero();
+        let linear_is_valid = w2_discriminant < T::zero() || z - w2 * d1 >= T::zero();
         let sphere_is_valid = xi < T::one() || z * xi + d1 >= T::zero();
         let is_valid = if linear_is_valid && sphere_is_valid {
             T::one()
