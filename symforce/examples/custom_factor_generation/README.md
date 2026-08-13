@@ -18,3 +18,16 @@ Contains a `generate` function which generates the residual in `factor_residuals
 ### `gen/*`:
 
 This directory contains the generated code for the C++ linearization function.
+
+### Rust + stack-algebra port
+
+The Rust port generates the same custom residual and Gauss-Newton linearization using
+stack-algebra matrices and SymForce's Rust geometry types:
+
+```bash
+PYTHONPATH=. .venv/bin/python symforce/examples/custom_factor_generation/generate_rust.py
+cargo run --manifest-path symforce/examples/custom_factor_generation/rust/Cargo.toml
+```
+
+The Rust codegen test compares the residual and Jacobian expressions with the C++ backend and
+compiles the generated crate.
