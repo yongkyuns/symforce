@@ -12,6 +12,7 @@ symforce.set_epsilon_to_symbol()
 
 import symforce.symbolic as sf
 from symforce import ops
+from symforce import typing as T
 from symforce.codegen import Codegen
 from symforce.codegen import CppConfig
 from symforce.codegen import geo_factors_codegen
@@ -62,12 +63,12 @@ class BundleAdjustmentRustCodegenTest(TestCase):
 
         for residual_function, function_input_types, optimized_arguments in cases:
             cpp_codegen = Codegen.function(
-                residual_function,
+                T.cast(T.Callable[..., T.Any], residual_function),
                 config=CppConfig(),
                 input_types=function_input_types,
             ).with_linearization(which_args=optimized_arguments)
             rust_codegen = Codegen.function(
-                residual_function,
+                T.cast(T.Callable[..., T.Any], residual_function),
                 config=rust_config,
                 input_types=function_input_types,
             ).with_linearization(which_args=optimized_arguments)

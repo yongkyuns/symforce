@@ -33,9 +33,9 @@ def main() -> None:
         config=config,
         input_types=[sf.Pose3, sf.V3, sf.V3, sf.V2, sf.Scalar],
         name="snavely_reprojection",
-    ).with_linearization(
-        which_args=["cam_T_world", "intrinsics", "point"]
-    ).generate_function(output_dir, skip_directory_nesting=True)
+    ).with_linearization(which_args=["cam_T_world", "intrinsics", "point"]).generate_function(
+        output_dir, skip_directory_nesting=True
+    )
 
 
 if __name__ == "__main__":

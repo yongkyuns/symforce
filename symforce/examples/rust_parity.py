@@ -109,9 +109,7 @@ def main() -> int:
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     build_dir = (
-        (root / args.build_dir).resolve()
-        if not args.build_dir.is_absolute()
-        else args.build_dir
+        (root / args.build_dir).resolve() if not args.build_dir.is_absolute() else args.build_dir
     )
 
     for example in EXAMPLES:

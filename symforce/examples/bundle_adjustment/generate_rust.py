@@ -60,9 +60,9 @@ def main() -> None:
         ],
         config=config,
         name="inverse_range_landmark_linear_gnc",
-    ).with_linearization(
-        which_args=["target_pose", "source_inverse_range"]
-    ).generate_function(output_dir, skip_directory_nesting=True)
+    ).with_linearization(which_args=["target_pose", "source_inverse_range"]).generate_function(
+        output_dir, skip_directory_nesting=True
+    )
 
 
 if __name__ == "__main__":

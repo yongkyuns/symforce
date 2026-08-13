@@ -6,7 +6,15 @@
 
 pub mod sym {
 
-    #[allow(unused_parens)]
+    #![allow(
+        unused_parens,
+        non_snake_case,
+        clippy::double_parens,
+        clippy::empty_line_after_doc_comments,
+        clippy::too_many_arguments,
+        clippy::unused_unit,
+        unused_variables
+    )]
 
     ///
     /// Given input symbols `x` and `y`, return a list of expressions which provide good test coverage
@@ -205,11 +213,11 @@ pub mod sym {
         }
 
         if let Some(res29) = res29 {
-            *res29 = x.floor();
+            *res29 = (x).floor();
         }
 
         if let Some(res30) = res30 {
-            *res30 = x.ceil();
+            *res30 = (x).ceil();
         }
 
         if let Some(res31) = res31 {

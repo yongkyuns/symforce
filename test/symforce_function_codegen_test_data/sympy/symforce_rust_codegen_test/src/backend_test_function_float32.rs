@@ -6,7 +6,15 @@
 
 pub mod sym {
 
-    #[allow(unused_parens)]
+    #![allow(
+        unused_parens,
+        non_snake_case,
+        clippy::double_parens,
+        clippy::empty_line_after_doc_comments,
+        clippy::too_many_arguments,
+        clippy::unused_unit,
+        unused_variables
+    )]
 
     ///
     /// Given input symbols `x` and `y`, return a list of expressions which provide good test coverage
@@ -141,11 +149,11 @@ pub mod sym {
         }
 
         if let Some(res13) = res13 {
-            *res13 = 2.0_f32 * _tmp1;
+            *res13 = 2_f32 * _tmp1;
         }
 
         if let Some(res14) = res14 {
-            *res14 = 2.0_f32 / core::f32::consts::PI.sqrt();
+            *res14 = 2_f32 / core::f32::consts::PI.sqrt();
         }
 
         if let Some(res15) = res15 {
@@ -233,11 +241,11 @@ pub mod sym {
         }
 
         if let Some(res36) = res36 {
-            *res36 = x + 1.0_f32;
+            *res36 = x + 1_f32;
         }
 
         if let Some(res37) = res37 {
-            *res37 = 2.0_f32 * x;
+            *res37 = 2_f32 * x;
         }
 
         if let Some(res38) = res38 {

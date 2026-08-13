@@ -11,6 +11,7 @@ symforce.set_symbolic_api("sympy")
 symforce.set_epsilon_to_symbol()
 
 from symforce import ops
+from symforce import typing as T
 from symforce.codegen import Codegen
 from symforce.codegen import CppConfig
 from symforce.codegen.backends.rust import RustAlgebra
@@ -34,10 +35,10 @@ class Robot3DLocalizationRustCodegenTest(TestCase):
 
         for residual_function, optimized_args in cases:
             cpp_codegen = Codegen.function(
-                residual_function, config=CppConfig()
+                T.cast(T.Callable[..., T.Any], residual_function), config=CppConfig()
             ).with_linearization(which_args=optimized_args)
             rust_codegen = Codegen.function(
-                residual_function, config=rust_config
+                T.cast(T.Callable[..., T.Any], residual_function), config=rust_config
             ).with_linearization(which_args=optimized_args)
 
             for output_name in ("res", "jacobian"):
