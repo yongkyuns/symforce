@@ -15,7 +15,8 @@ pub mod geo;
 
 pub use geo::{
     ATANCameraCal, CameraCal, CentralCameraCal, DoubleSphereCameraCal, LinearCameraCal,
-    PolynomialCameraCal, Pose2, Pose3, PosedCamera, Rot2, Rot3, SphericalCameraCal, Unit3,
+    OrthographicCameraCal, PolynomialCameraCal, Pose2, Pose3, PosedCamera, Rot2, Rot3,
+    SphericalCameraCal, Unit3,
 };
 
 #[cfg(feature = "imu")]

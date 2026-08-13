@@ -405,6 +405,7 @@ def generate(config: CodegenConfig, output_dir: T.Optional[Path] = None) -> Path
             sf.PolynomialCameraCal,
             sf.DoubleSphereCameraCal,
             sf.SphericalCameraCal,
+            sf.OrthographicCameraCal,
         )
         unsupported_types = tuple(cls for cls in requested_types if cls not in supported_types)
         if unsupported_types:

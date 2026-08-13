@@ -615,6 +615,76 @@ impl<T: Real + MatrixScalar + ReductionScalar> CameraCal<T> for SphericalCameraC
     }
 }
 
+/// An orthographic camera calibration with storage `(fx, fy, cx, cy)`.
+///
+/// Orthographic projection ignores the camera-frame depth when computing
+/// pixels, but points with non-positive depth are marked invalid.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OrthographicCameraCal<T> {
+    data: Vector<4, T>,
+}
+
+impl<T: Real + MatrixScalar + ReductionScalar> OrthographicCameraCal<T> {
+    /// Constructs an orthographic calibration from focal length and principal point.
+    #[inline]
+    pub fn new(focal_length: Vector<2, T>, principal_point: Vector<2, T>) -> Self {
+        Self {
+            data: Vector::from_rows([
+                [focal_length[0]],
+                [focal_length[1]],
+                [principal_point[0]],
+                [principal_point[1]],
+            ]),
+        }
+    }
+
+    /// Constructs an orthographic calibration from its four-element storage.
+    #[inline]
+    pub fn from_storage(data: Vector<4, T>) -> Self {
+        Self { data }
+    }
+
+    /// Returns the storage representation.
+    #[inline]
+    pub fn data(&self) -> &Vector<4, T> {
+        &self.data
+    }
+
+    /// Returns the focal length `(fx, fy)`.
+    #[inline]
+    pub fn focal_length(&self) -> Vector<2, T> {
+        Vector::from_rows([[self.data[0]], [self.data[1]]])
+    }
+
+    /// Returns the principal point `(cx, cy)`.
+    #[inline]
+    pub fn principal_point(&self) -> Vector<2, T> {
+        Vector::from_rows([[self.data[2]], [self.data[3]]])
+    }
+
+    /// Projects a camera-frame point into pixels without perspective division.
+    #[inline]
+    pub fn pixel_from_camera_point(&self, point: &Vector<3, T>, _epsilon: T) -> (Vector<2, T>, T) {
+        let pixel = Vector::from_rows([
+            [point[0] * self.data[0] + self.data[2]],
+            [point[1] * self.data[1] + self.data[3]],
+        ]);
+        let is_valid = if point[2] > T::zero() {
+            T::one()
+        } else {
+            T::zero()
+        };
+        (pixel, is_valid)
+    }
+}
+
+impl<T: Real + MatrixScalar + ReductionScalar> CameraCal<T> for OrthographicCameraCal<T> {
+    #[inline]
+    fn pixel_from_camera_point(&self, point: &Vector<3, T>, epsilon: T) -> (Vector<2, T>, T) {
+        self.pixel_from_camera_point(point, epsilon)
+    }
+}
+
 /// A camera calibration attached to a pose in the global frame.
 ///
 /// The pose follows SymForce's `global_T_cam` convention: applying the pose
