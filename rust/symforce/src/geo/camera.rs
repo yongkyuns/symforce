@@ -485,6 +485,136 @@ impl<T: Real + MatrixScalar + ReductionScalar> CentralCameraCal<T> for DoubleSph
     }
 }
 
+/// A Kannala–Brandt spherical camera calibration.
+///
+/// The storage order is `(fx, fy, cx, cy, critical_theta, d0, d1, d2, d3,
+/// p0, p1)`. The four `d` values define the odd radial polynomial and `p0`,
+/// `p1` are tangential distortion coefficients. This model supports forward
+/// projection; inverse projection requires solving the radial polynomial.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SphericalCameraCal<T> {
+    data: Vector<11, T>,
+}
+
+impl<T: Real + MatrixScalar + ReductionScalar> SphericalCameraCal<T> {
+    /// Constructs a spherical calibration from its camera parameters.
+    #[inline]
+    pub fn new(
+        focal_length: Vector<2, T>,
+        principal_point: Vector<2, T>,
+        critical_theta: T,
+        distortion_coeffs: Vector<6, T>,
+    ) -> Self {
+        Self {
+            data: Vector::from_rows([
+                [focal_length[0]],
+                [focal_length[1]],
+                [principal_point[0]],
+                [principal_point[1]],
+                [critical_theta],
+                [distortion_coeffs[0]],
+                [distortion_coeffs[1]],
+                [distortion_coeffs[2]],
+                [distortion_coeffs[3]],
+                [distortion_coeffs[4]],
+                [distortion_coeffs[5]],
+            ]),
+        }
+    }
+
+    /// Constructs a spherical calibration from its eleven-element storage.
+    #[inline]
+    pub fn from_storage(data: Vector<11, T>) -> Self {
+        Self { data }
+    }
+
+    /// Returns the storage representation.
+    #[inline]
+    pub fn data(&self) -> &Vector<11, T> {
+        &self.data
+    }
+
+    /// Returns the focal length `(fx, fy)`.
+    #[inline]
+    pub fn focal_length(&self) -> Vector<2, T> {
+        Vector::from_rows([[self.data[0]], [self.data[1]]])
+    }
+
+    /// Returns the principal point `(cx, cy)`.
+    #[inline]
+    pub fn principal_point(&self) -> Vector<2, T> {
+        Vector::from_rows([[self.data[2]], [self.data[3]]])
+    }
+
+    /// Returns the critical angle for valid projection.
+    #[inline]
+    pub fn critical_theta(&self) -> T {
+        self.data[4]
+    }
+
+    /// Returns the six radial and tangential distortion coefficients.
+    #[inline]
+    pub fn distortion_coeffs(&self) -> Vector<6, T> {
+        Vector::from_rows([
+            [self.data[5]],
+            [self.data[6]],
+            [self.data[7]],
+            [self.data[8]],
+            [self.data[9]],
+            [self.data[10]],
+        ])
+    }
+
+    /// Projects a camera-frame point into pixels using spherical distortion.
+    #[inline]
+    pub fn pixel_from_camera_point(&self, point: &Vector<3, T>, epsilon: T) -> (Vector<2, T>, T) {
+        let x = point[0];
+        let y = point[1];
+        let z = point[2];
+        let xy_norm = (x * x + y * y + epsilon).sqrt();
+        let theta = xy_norm.atan2(z);
+        let is_valid = if self.data[4] - theta > T::zero() {
+            T::one()
+        } else {
+            T::zero()
+        };
+        let theta = theta.min(self.data[4] - epsilon);
+        let theta_squared = theta * theta;
+        let theta_cubed = theta * theta_squared;
+        let theta_fifth = theta_cubed * theta_squared;
+        let theta_seventh = theta_fifth * theta_squared;
+        let theta_ninth = theta_seventh * theta_squared;
+        let radius = theta
+            + self.data[5] * theta_cubed
+            + self.data[6] * theta_fifth
+            + self.data[7] * theta_seventh
+            + self.data[8] * theta_ninth;
+        let image_x = radius / xy_norm * x;
+        let image_y = radius / xy_norm * y;
+        let p0 = self.data[9];
+        let p1 = self.data[10];
+        let two = T::one() + T::one();
+        let tangential_x = (two + T::one()) * p0 * image_x * image_x
+            + p0 * image_y * image_y
+            + two * p1 * image_x * image_y;
+        let tangential_y = (two + T::one()) * p1 * image_y * image_y
+            + p1 * image_x * image_x
+            + two * p0 * image_x * image_y;
+        let pixel = Vector::from_rows([
+            [self.data[0] * (image_x + tangential_x) + self.data[2]],
+            [self.data[1] * (image_y + tangential_y) + self.data[3]],
+        ]);
+        (pixel, is_valid)
+    }
+}
+
+impl<T: Real + MatrixScalar + ReductionScalar> CameraCal<T> for SphericalCameraCal<T> {
+    #[inline]
+    fn pixel_from_camera_point(&self, point: &Vector<3, T>, epsilon: T) -> (Vector<2, T>, T) {
+        self.pixel_from_camera_point(point, epsilon)
+    }
+}
+
 /// A camera calibration attached to a pose in the global frame.
 ///
 /// The pose follows SymForce's `global_T_cam` convention: applying the pose

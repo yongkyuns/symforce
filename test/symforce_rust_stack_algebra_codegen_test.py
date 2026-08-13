@@ -179,6 +179,28 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
             ops.StorageOps.to_storage(rust.outputs[rust.return_key]),
         )
 
+    def test_spherical_camera_expression_matches_cpp(self) -> None:
+        def project(point: sf.V3, calibration: sf.SphericalCameraCal, epsilon: sf.Scalar) -> sf.V2:
+            pixel, _ = calibration.pixel_from_camera_point(point, epsilon)
+            return pixel
+
+        input_types = [sf.V3, sf.SphericalCameraCal, sf.Scalar]
+        cpp = Codegen.function(project, config=CppConfig(), input_types=input_types)
+        rust = Codegen.function(
+            project,
+            config=RustConfig(
+                scalar_type=ScalarType.DOUBLE,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            ),
+            input_types=input_types,
+        )
+        assert cpp.return_key is not None
+        assert rust.return_key is not None
+        self.assertEqual(
+            ops.StorageOps.to_storage(cpp.outputs[cpp.return_key]),
+            ops.StorageOps.to_storage(rust.outputs[rust.return_key]),
+        )
+
     @unittest.skipIf(shutil.which("cargo") is None, "cargo is not installed")
     def test_geo_package_compiles_against_stack_algebra(self) -> None:
         stack_algebra_dir = Path(__file__).resolve().parents[2] / "stack-algebra"
@@ -202,6 +224,7 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
                     "ATANCameraCal",
                     "PolynomialCameraCal",
                     "DoubleSphereCameraCal",
+                    "SphericalCameraCal",
                 ),
             ),
             output_dir=output_dir,
@@ -265,8 +288,24 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
             ),
             input_types=[sf.V3, sf.DoubleSphereCameraCal, sf.Scalar],
         ).generate_function(output_dir / "src", skip_directory_nesting=True)
+
+        def spherical_project(
+            point: sf.V3, calibration: sf.SphericalCameraCal, epsilon: sf.Scalar
+        ) -> sf.V2:
+            pixel, _ = calibration.pixel_from_camera_point(point, epsilon)
+            return pixel
+
+        Codegen.function(
+            spherical_project,
+            config=RustConfig(
+                scalar_type=ScalarType.DOUBLE,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            ),
+            input_types=[sf.V3, sf.SphericalCameraCal, sf.Scalar],
+        ).generate_function(output_dir / "src", skip_directory_nesting=True)
         (output_dir / "src" / "lib.rs").write_text(
             "mod atan_project;\nmod polynomial_project;\nmod double_sphere_project;\n"
+            "mod spherical_project;\n"
             '#[path = "../sym/mod.rs"]\npub mod sym;\n'
         )
 

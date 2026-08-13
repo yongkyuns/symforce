@@ -1,7 +1,7 @@
 use stack_algebra::{Matrix, Vector};
 use symforce_rust::{
     ATANCameraCal, DoubleSphereCameraCal, LinearCameraCal, PolynomialCameraCal, Pose3, PosedCamera,
-    Rot3,
+    Rot3, SphericalCameraCal,
 };
 
 #[test]
@@ -109,6 +109,28 @@ fn double_sphere_camera_cal_matches_symforce_reference_values() {
         assert!((ray[index] - expected[index]).abs() < 1e-12);
     }
     assert_eq!(ray_valid, 0.0);
+}
+
+#[test]
+fn spherical_camera_cal_matches_symforce_reference_values() {
+    let calibration = SphericalCameraCal::from_storage(Matrix::<11, 1, f64>::from_rows([
+        [1.0],
+        [2.0],
+        [3.0],
+        [4.0],
+        [std::f64::consts::PI],
+        [0.035],
+        [-0.025],
+        [0.007],
+        [-0.0015],
+        [0.00023],
+        [-0.00027],
+    ]));
+    let point = Vector::<3, f64>::from_rows([[0.6], [0.8], [0.2]]);
+    let (pixel, is_valid) = calibration.pixel_from_camera_point(&point, 1e-8);
+    assert!((pixel[0] - 3.82847042313402).abs() < 1e-12);
+    assert!((pixel[1] - 6.20705693661234).abs() < 1e-12);
+    assert_eq!(is_valid, 1.0);
 }
 
 #[test]
