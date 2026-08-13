@@ -50,8 +50,7 @@ Result<Scalar> Run() {
       integrator.IntegrateMeasurement(accel, gyro, accel_cov, gyro_cov, Scalar{1.0e-3}, epsilon);
     }
     integration_seconds +=
-        std::chrono::duration<double>(std::chrono::steady_clock::now() - integration_start)
-            .count();
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - integration_start).count();
     const auto& delta = integrator.PreintegratedMeasurements().delta;
     const auto [pose_j, vel_j] = delta.RollForwardState(pose_i, vel_i, gravity);
     const auto factor_start = std::chrono::steady_clock::now();
@@ -59,8 +58,8 @@ Result<Scalar> Run() {
     Eigen::Matrix<Scalar, 9, 24> jacobian;
     Eigen::Matrix<Scalar, 24, 24> hessian;
     Eigen::Matrix<Scalar, 24, 1> rhs;
-    sym::ImuFactor<Scalar>{integrator}(pose_i, vel_i, pose_j, vel_j, accel_bias, gyro_bias,
-                                       gravity, epsilon, &residual, &jacobian, &hessian, &rhs);
+    sym::ImuFactor<Scalar>{integrator}(pose_i, vel_i, pose_j, vel_j, accel_bias, gyro_bias, gravity,
+                                       epsilon, &residual, &jacobian, &hessian, &rhs);
     factor_seconds +=
         std::chrono::duration<double>(std::chrono::steady_clock::now() - factor_start).count();
     if (round == 0) {

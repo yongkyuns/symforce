@@ -213,11 +213,11 @@ pub mod sym {
         }
 
         if let Some(res29) = res29 {
-            *res29 = x.floor();
+            *res29 = (x).floor();
         }
 
         if let Some(res30) = res30 {
-            *res30 = x.ceil();
+            *res30 = (x).ceil();
         }
 
         if let Some(res31) = res31 {
@@ -273,9 +273,9 @@ pub mod sym {
         }
 
         if let Some(res44) = res44 {
-            *res44 = if (x < 0.0_f32) {
+            *res44 = if (x < 0.0) {
                 0.0
-            } else if (x == 0.0_f32) {
+            } else if (x == 0.0) {
                 (1_f32 / 2_f32)
             } else {
                 1_f32
@@ -291,11 +291,11 @@ pub mod sym {
         }
 
         if let Some(res47) = res47 {
-            *res47 = if (x >= y) { x } else { y };
+            *res47 = x.max(y);
         }
 
         if let Some(res48) = res48 {
-            *res48 = if (x <= y) { x } else { y };
+            *res48 = x.min(y);
         }
 
         if let Some(res49) = res49 {
