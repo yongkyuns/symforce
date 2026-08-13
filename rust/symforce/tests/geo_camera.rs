@@ -1,5 +1,7 @@
 use stack_algebra::{Matrix, Vector};
-use symforce_rust::{ATANCameraCal, LinearCameraCal, Pose3, PosedCamera, Rot3};
+use symforce_rust::{
+    ATANCameraCal, LinearCameraCal, PolynomialCameraCal, Pose3, PosedCamera, Rot3,
+};
 
 #[test]
 fn linear_camera_cal_storage_and_projection_match_symforce_convention() {
@@ -54,6 +56,32 @@ fn atan_camera_cal_round_trips_projection_and_ray() {
     let far_pixel = Vector::<2, f64>::from_rows([[10_000.0], [240.0]]);
     let (_, far_valid) = calibration.camera_ray_from_pixel(&far_pixel, 1e-10);
     assert_eq!(far_valid, 0.0);
+}
+
+#[test]
+fn polynomial_camera_cal_projects_and_checks_critical_radius() {
+    let calibration = PolynomialCameraCal::new(
+        Vector::<2, f64>::from_rows([[2.0], [3.0]]),
+        Vector::<2, f64>::from_rows([[10.0], [20.0]]),
+        1.0,
+        Vector::<3, f64>::from_rows([[0.5], [0.0], [0.0]]),
+    );
+    assert_eq!(
+        calibration.data().as_slice(),
+        &[2.0, 3.0, 10.0, 20.0, 1.0, 0.5, 0.0, 0.0]
+    );
+
+    let point = Vector::<3, f64>::from_rows([[0.2], [-0.1], [1.0]]);
+    let (pixel, is_valid) = calibration.pixel_from_camera_point(&point, 1e-10);
+    let radius_squared = 0.2_f64 * 0.2 + 0.1_f64 * 0.1 + 1e-10;
+    let weight = 1.0 + 0.5 * radius_squared;
+    assert!((pixel[0] - (10.0 + 2.0 * 0.2 * weight)).abs() < 1e-12);
+    assert!((pixel[1] - (20.0 - 3.0 * 0.1 * weight)).abs() < 1e-12);
+    assert_eq!(is_valid, 1.0);
+
+    let outside = Vector::<3, f64>::from_rows([[1.0], [0.0], [1.0]]);
+    let (_, outside_valid) = calibration.pixel_from_camera_point(&outside, 1e-10);
+    assert_eq!(outside_valid, 0.0);
 }
 
 #[test]
