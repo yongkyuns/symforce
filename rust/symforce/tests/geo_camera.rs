@@ -1,6 +1,7 @@
 use stack_algebra::{Matrix, Vector};
 use symforce_rust::{
-    ATANCameraCal, LinearCameraCal, PolynomialCameraCal, Pose3, PosedCamera, Rot3,
+    ATANCameraCal, DoubleSphereCameraCal, LinearCameraCal, PolynomialCameraCal, Pose3, PosedCamera,
+    Rot3,
 };
 
 #[test]
@@ -82,6 +83,32 @@ fn polynomial_camera_cal_projects_and_checks_critical_radius() {
     let outside = Vector::<3, f64>::from_rows([[1.0], [0.0], [1.0]]);
     let (_, outside_valid) = calibration.pixel_from_camera_point(&outside, 1e-10);
     assert_eq!(outside_valid, 0.0);
+}
+
+#[test]
+fn double_sphere_camera_cal_matches_symforce_reference_values() {
+    let calibration = DoubleSphereCameraCal::from_storage(Matrix::<6, 1, f64>::from_rows([
+        [1.0],
+        [2.0],
+        [3.0],
+        [4.0],
+        [5.1],
+        [-6.2],
+    ]));
+
+    let point = Vector::<3, f64>::from_rows([[0.6], [0.8], [0.2]]);
+    let (pixel, is_valid) = calibration.pixel_from_camera_point(&point, 1e-8);
+    assert!((pixel[0] - 3.12417556254144).abs() < 1e-12);
+    assert!((pixel[1] - 4.33113483344385).abs() < 1e-12);
+    assert_eq!(is_valid, 1.0);
+
+    let pixel = Vector::<2, f64>::from_rows([[0.6], [0.8]]);
+    let (ray, ray_valid) = calibration.camera_ray_from_pixel(&pixel, 1e-8);
+    let expected = [-1.7554218715299938, -1.1702812476866626, -1.117691027921969];
+    for index in 0..3 {
+        assert!((ray[index] - expected[index]).abs() < 1e-12);
+    }
+    assert_eq!(ray_valid, 0.0);
 }
 
 #[test]
