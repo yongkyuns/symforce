@@ -86,10 +86,8 @@
     {%- if spec.return_key is not none -%}
         {% set type = spec.outputs[spec.return_key] %}
         {% set T = typing_util.get_type(type) %}
-        {% if is_symbolic(type) or T.__name__ == "float" %}
-            {{ format_scalar(spec) }}
-        {% elif issubclass(T, Matrix) %}
-            {{ format_vector(T, spec.return_key, spec) }}
+        {% if is_symbolic(type) or T.__name__ == "float" or issubclass(T, Matrix) %}
+            {{ format_typename(spec.return_key, type, spec) }}
         {% else %}
             {{ raise("Unsupported return type: {}".format(T)) }}
         {% endif %}
@@ -275,22 +273,16 @@
         {% set T_return = typing_util.get_type(type) %}
         {% if name == spec.return_key and T_return.__name__ != 'NoneType' %}
             {% if is_symbolic(type) or T_return.__name__ == "float" %}
-            {{ terms[0][1] }};
+            {{ terms[0][1] }}
             {% elif issubclass(T_return, Matrix) %}
-                {% set size = T_return.SHAPE[0] * T_return.SHAPE[1] %}
-                {% if spec.config.algebra.name == "STACK_ALGEBRA" %}
-                stack_algebra::Matrix::<{{ T_return.SHAPE[0] }}, {{ T_return.SHAPE[1] }}, {{ format_scalar(spec) }}>::from_rows([
+                {# Indexed assignments preserve shape and do not depend on storage order or
+                   on whether the printer elides structurally zero entries. Row vectors retain
+                   the backend's existing flattened-vector API. #}
+                let {% if terms %}mut {% endif %}{{ name }} = <{{ format_typename(name, type, spec) | trim }}>::zeros();
                 {% for lhs, rhs in terms %}
-                    [{{ rhs }}]{% if not loop.last %},{% endif %}
+                {{ lhs }} = {{ rhs }};
                 {% endfor %}
-                ])
-                {% else %}
-                {{ format_vector(T_return, name, spec) }}::new(
-                {% for lhs, rhs in terms %}
-        {{ rhs }}{% if not loop.last %},{% endif %}
-                {% endfor %}
-    )
-                {% endif %}
+                {{ name }}
             {% else %}
             {{ raise("Cannot return an output of type {}: The Rust backend only supports returning scalars, vectors, and matrices.".format(T_return)) }}
             {% endif %}
