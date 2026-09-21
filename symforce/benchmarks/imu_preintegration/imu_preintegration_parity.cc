@@ -3,8 +3,6 @@
  * This source code is under the Apache 2.0 license found in the LICENSE file.
  * ---------------------------------------------------------------------------- */
 
-// Protocol: scalar case field rows columns values-in-row-major-order.
-// Keep inputs and protocol synchronized with rust/symforce/examples/imu_parity.rs.
 #include <cmath>
 #include <cstdint>
 #include <iomanip>
@@ -12,12 +10,16 @@
 #include <string>
 
 #include <Eigen/Core>
+
 #include <sym/pose3.h>
 #include <sym/unit3.h>
 #include <symforce/slam/imu_preintegration/imu_factor.h>
 #include <symforce/slam/imu_preintegration/imu_preintegrator.h>
 
+// Protocol: scalar case field rows columns values-in-row-major-order.
+// Keep inputs and protocol synchronized with rust/symforce/examples/imu_parity.rs.
 namespace {
+
 struct Rng {
   std::uint64_t state;
   double Signed() {
@@ -49,8 +51,8 @@ void Emit(const char* scalar, int test_case, const std::string& field,
 }
 
 template <int Dim, typename Scalar, typename Factor, typename... Args>
-void Evaluate(const char* scalar, int test_case, const std::string& prefix,
-              const Factor& factor, const Args&... args) {
+void Evaluate(const char* scalar, int test_case, const std::string& prefix, const Factor& factor,
+              const Args&... args) {
   Eigen::Matrix<Scalar, 9, 1> residual = Eigen::Matrix<Scalar, 9, 1>::Zero();
   Eigen::Matrix<Scalar, 9, Dim> jacobian = Eigen::Matrix<Scalar, 9, Dim>::Zero();
   Eigen::Matrix<Scalar, Dim, Dim> hessian = Eigen::Matrix<Scalar, Dim, Dim>::Zero();
@@ -110,8 +112,10 @@ void Run(const char* scalar, Scalar epsilon) {
     pose_j.Data()[5] -= Scalar(0.03);
     pose_j.Data()[6] += Scalar(0.01);
     const Vector3 vel_j = prediction.second + Vector3{Scalar(0.1), Scalar(-0.05), Scalar(0.02)};
-    const Vector3 eval_accel_bias = accel_bias + Vector3{Scalar(0.01), Scalar(-0.02), Scalar(0.03)};
-    const Vector3 eval_gyro_bias = gyro_bias + Vector3{Scalar(0.001), Scalar(0.002), Scalar(-0.003)};
+    const Vector3 eval_accel_bias =
+        accel_bias + Vector3{Scalar(0.01), Scalar(-0.02), Scalar(0.03)};
+    const Vector3 eval_gyro_bias =
+        gyro_bias + Vector3{Scalar(0.001), Scalar(0.002), Scalar(-0.003)};
 
     // A deliberately non-diagonal square-root information matrix broadens factor coverage beyond
     // the covariance-derived factor path. This is also the matrix used by the fresh Rust generator
@@ -124,24 +128,25 @@ void Run(const char* scalar, Scalar epsilon) {
       }
     }
 
-    Evaluate<24, Scalar>(scalar, test_case, "imu", sym::ImuFactor<Scalar>(integrator),
-                         pose_i, vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity,
-                         epsilon);
-    Evaluate<27, Scalar>(scalar, test_case, "gravity", sym::ImuWithGravityFactor<Scalar>(integrator),
-                         pose_i, vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity,
-                         epsilon);
-    const Scalar gravity_norm = gravity.norm();
-    const sym::Unit3<Scalar> direction = sym::Unit3<Scalar>::FromUnitVector(gravity / gravity_norm);
-    Evaluate<26, Scalar>(scalar, test_case, "direction",
-                         sym::ImuWithGravityDirectionFactor<Scalar>(integrator), pose_i, vel_i,
-                         pose_j, vel_j, eval_accel_bias, eval_gyro_bias, direction, gravity_norm,
-                         epsilon);
-    Evaluate<24, Scalar>(scalar, test_case, "manual_imu",
-                         sym::ImuFactor<Scalar>(measurement, manual_sqrt_info), pose_i, vel_i,
+    Evaluate<24, Scalar>(scalar, test_case, "imu", sym::ImuFactor<Scalar>(integrator), pose_i, vel_i,
                          pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
-    Evaluate<27, Scalar>(scalar, test_case, "manual_gravity",
-                         sym::ImuWithGravityFactor<Scalar>(measurement, manual_sqrt_info), pose_i,
-                         vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
+    Evaluate<27, Scalar>(scalar, test_case, "gravity",
+                         sym::ImuWithGravityFactor<Scalar>(integrator), pose_i, vel_i, pose_j, vel_j,
+                         eval_accel_bias, eval_gyro_bias, gravity, epsilon);
+    const Scalar gravity_norm = gravity.norm();
+    const sym::Unit3<Scalar> direction =
+        sym::Unit3<Scalar>::FromUnitVector(gravity / gravity_norm);
+    Evaluate<26, Scalar>(
+        scalar, test_case, "direction", sym::ImuWithGravityDirectionFactor<Scalar>(integrator),
+        pose_i, vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, direction, gravity_norm,
+        epsilon);
+    Evaluate<24, Scalar>(scalar, test_case, "manual_imu",
+                         sym::ImuFactor<Scalar>(measurement, manual_sqrt_info), pose_i, vel_i, pose_j,
+                         vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
+    Evaluate<27, Scalar>(
+        scalar, test_case, "manual_gravity",
+        sym::ImuWithGravityFactor<Scalar>(measurement, manual_sqrt_info), pose_i, vel_i, pose_j,
+        vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
     Evaluate<26, Scalar>(
         scalar, test_case, "manual_direction",
         sym::ImuWithGravityDirectionFactor<Scalar>(measurement, manual_sqrt_info), pose_i, vel_i,
