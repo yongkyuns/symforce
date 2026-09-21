@@ -2,6 +2,7 @@
 // Included inside each scalar module by symforce_rust_geometry_codegen_test.py.
 
 fn check<const R: usize, const C: usize>(
+    label: &str,
     expected: &Matrix<R, C, Scalar>,
     actual: &Matrix<R, C, Scalar>,
     lower_only: bool,
@@ -23,7 +24,7 @@ fn check<const R: usize, const C: usize>(
                 let b = actual[(row, col)];
                 let budget = absolute + RELATIVE * a.abs();
                 assert!(b.is_finite() && (a - b).abs() <= budget,
-                    "({row},{col}): runtime={a}, generated={b}, budget={budget}");
+                    "{label} ({row},{col}): runtime={a}, generated={b}, budget={budget}");
             }
         }
     }
@@ -90,8 +91,13 @@ fn regenerated_imu_matches_the_qualified_runtime() {
             );
             fresh.delta.dt += dt;
             runtime.integrate_measurement(&accel, &gyro, &accel_cov, &gyro_cov, dt, EPSILON);
-            check(&runtime.preintegrated_measurements().to_storage(), &fresh.to_storage(), false);
-            check(runtime.covariance(), &covariance, true);
+            check(
+                "update.measurement",
+                &runtime.preintegrated_measurements().to_storage(),
+                &fresh.to_storage(),
+                false,
+            );
+            check("update.covariance", runtime.covariance(), &covariance, true);
         }
         let m = runtime.preintegrated_measurements();
         let pose_i = Pose3::new(
@@ -107,8 +113,8 @@ fn regenerated_imu_matches_the_qualified_runtime() {
             &pose_i, &vel_i, &m.delta.dr, &m.delta.dv, &m.delta.dp, &gravity, m.delta.dt,
             Some(&mut pose_j), Some(&mut vel_j),
         );
-        check(expected.0.data(), pose_j.data(), false);
-        check(&expected.1, &vel_j, false);
+        check("roll_forward.pose", expected.0.data(), pose_j.data(), false);
+        check("roll_forward.velocity", &expected.1, &vel_j, false);
         pose_j = pose_j.retract(
             &Vector::from_rows([[0.01], [0.02], [-0.03], [0.02], [-0.03], [0.01]]), EPSILON);
         vel_j = vel_j + Vector::from_rows([[0.1], [-0.02], [0.07]]);
@@ -122,7 +128,7 @@ fn regenerated_imu_matches_the_qualified_runtime() {
         // Compare every residual/Jacobian/RHS component and the defined lower Hessian.
         // The runtime is independently checked against C++ by the inherited parity gate.
         macro_rules! compare_factor {
-            ($function:path, $dimension:literal, $reference:expr, $($gravity:expr),+) => {{
+            ($prefix:literal, $function:path, $dimension:literal, $reference:expr, $($gravity:expr),+) => {{
                 let reference = $reference;
                 let mut residual = Matrix::<9, 1, Scalar>::zeros();
                 let mut jacobian = Matrix::<9, $dimension, Scalar>::zeros();
@@ -136,21 +142,21 @@ fn regenerated_imu_matches_the_qualified_runtime() {
                     $($gravity),+, m.delta.dt, EPSILON,
                     Some(&mut residual), Some(&mut jacobian), Some(&mut hessian), Some(&mut rhs),
                 );
-                check(&reference.residual, &residual, false);
-                check(&reference.jacobian, &jacobian, false);
-                check(&reference.hessian, &hessian, true);
-                check(&reference.rhs, &rhs, false);
+                check(concat!($prefix, ".residual"), &reference.residual, &residual, false);
+                check(concat!($prefix, ".jacobian"), &reference.jacobian, &jacobian, false);
+                check(concat!($prefix, ".hessian"), &reference.hessian, &hessian, true);
+                check(concat!($prefix, ".rhs"), &reference.rhs, &rhs, false);
             }};
         }
-        compare_factor!(internal_imu_factor::sym::internal_imu_factor, 24,
+        compare_factor!("imu", internal_imu_factor::sym::internal_imu_factor, 24,
             ImuFactorT::new(*m, info).linearize(&pose_i, &vel_i, &pose_j, &vel_j,
                 &eval_accel_bias, &eval_gyro_bias, &gravity, EPSILON), &gravity);
-        compare_factor!(internal_imu_with_gravity_factor::sym::internal_imu_with_gravity_factor, 27,
+        compare_factor!("gravity", internal_imu_with_gravity_factor::sym::internal_imu_with_gravity_factor, 27,
             ImuWithGravityFactorT::new(*m, info).linearize(&pose_i, &vel_i, &pose_j, &vel_j,
                 &eval_accel_bias, &eval_gyro_bias, &gravity, EPSILON), &gravity);
         let norm = gravity.squared_norm().sqrt();
         let direction = Unit3::from_unit_vector(gravity / norm);
-        compare_factor!(internal_imu_unit_gravity_factor::sym::internal_imu_unit_gravity_factor, 26,
+        compare_factor!("direction", internal_imu_unit_gravity_factor::sym::internal_imu_unit_gravity_factor, 26,
             ImuWithGravityDirectionFactorT::new(*m, info).linearize(&pose_i, &vel_i, &pose_j, &vel_j,
                 &eval_accel_bias, &eval_gyro_bias, &direction, norm, EPSILON), &direction, norm);
     }

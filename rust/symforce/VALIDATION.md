@@ -88,13 +88,17 @@ byte-for-byte regeneration of the checked-in scalar-generic runtime kernels.
 ## Complete IMU comparisons
 
 The paired IMU drivers emit a strict, shaped, row-major protocol. There are 12 deterministic cases
-per scalar precision, 384 records, and 70,344 compared scalar components. Each case integrates 20 to
+per scalar precision, 672 records, and 137,016 compared scalar components. Each case integrates 20 to
 31 samples with varied biases, anisotropic noise, measurements, gravity, and timestep. Deliberate
 state and bias discrepancies make factor residuals and right-hand sides nonzero.
 
 Compared outputs are the complete 62-element measurement storage (including every bias derivative),
 9x9 covariance, rolled-forward pose/velocity, and residual/Jacobian/Hessian/right-hand-side outputs
-for the fixed-gravity, variable-gravity, and gravity-direction factor parameterizations. Hessians
+for the fixed-gravity, variable-gravity, and gravity-direction factor parameterizations. Each factor
+is evaluated both with covariance-derived square-root information and with a deterministic,
+non-diagonal lower-triangular square-root-information matrix. This broader branch is deliberately
+shared with the fresh-generation contract so it can distinguish generator errors from stale runtime
+kernels. Hessians
 are symmetrized from their defined lower triangle on both sides; unspecified upper-triangle memory
 is not treated as a numerical output.
 

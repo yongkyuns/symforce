@@ -30,13 +30,21 @@ class ImuParityProtocolTest(unittest.TestCase):
     def test_complete_equal_outputs_pass(self) -> None:
         data = parity.parse(serialize(records()), "fixture")
         summary = parity.assert_parity(data, data)
-        self.assertEqual(summary["values_compared"], 70344)
-        self.assertEqual(summary["records"], 384)
+        self.assertEqual(summary["values_compared"], 137016)
+        self.assertEqual(summary["records"], 672)
 
     def test_off_diagonal_mismatch_fails_in_both_precisions(self) -> None:
         reference = records()
         for scalar in parity.SCALARS:
-            for field in ("covariance", "imu.jacobian", "gravity.hessian", "direction.hessian"):
+            for field in (
+                "covariance",
+                "imu.jacobian",
+                "gravity.hessian",
+                "direction.hessian",
+                "manual_imu.jacobian",
+                "manual_gravity.hessian",
+                "manual_direction.hessian",
+            ):
                 with self.subTest(scalar=scalar, field=field):
                     changed = records()
                     changed[(scalar, 5, field)][1] += 0.5

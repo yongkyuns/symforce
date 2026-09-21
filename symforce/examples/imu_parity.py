@@ -22,7 +22,14 @@ FIELD_SHAPES = {
     "pose": (7, 1),
     "velocity": (3, 1),
 }
-for _prefix, _dimension in (("imu", 24), ("gravity", 27), ("direction", 26)):
+for _prefix, _dimension in (
+    ("imu", 24),
+    ("gravity", 27),
+    ("direction", 26),
+    ("manual_imu", 24),
+    ("manual_gravity", 27),
+    ("manual_direction", 26),
+):
     FIELD_SHAPES.update({
         f"{_prefix}.residual": (9, 1),
         f"{_prefix}.jacobian": (9, _dimension),
