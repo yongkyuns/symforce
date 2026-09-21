@@ -43,8 +43,9 @@ output normalization to match the existing raw-storage-wrapper runtime.
 Normalized and raw geometry outputs are independently tested for every type.
 The auto-derivative update is generated and compiled; its numerical equivalence
 is not asserted by this test. The same crate tests the Unit3 chart basis.
-CI additionally cross-compiles it for ``thumbv7em-none-eabihf`` and retains its
-source, lockfile, and compiler/test logs.
+CI uses the repository's vendored SymEngine for this full-generation test while
+retaining SymPy for the original codegen/camera modules. It cross-compiles the
+fresh crate for ``thumbv7em-none-eabihf`` and retains source, lockfile, and logs.
 
 This does not yet provide a regeneration command for the existing checked-in
 scalar-generic IMU kernels. Those kernels and their runtime interfaces are

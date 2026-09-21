@@ -45,7 +45,10 @@ standard-library tests. Optional developer tests remain optional outside the req
 
 The numerical CI job checks out stack-algebra alongside SymForce at the exact runtime lockfile
 revision, provides the generated C++/LCM headers, and runs the existing compilation and direct camera
-runtime comparisons without allowing their prerequisite checks to silently skip.
+runtime comparisons without allowing their prerequisite checks to silently skip. The original
+required modules continue to use SymPy. Full fresh IMU generation uses the repository's vendored
+SymEngine backend in a separate required step; the build target is `symenginepy`. Explicit backend
+selection fails if that engine cannot be imported, and its resolved module path is retained.
 
 ### Typed geometry and fresh IMU generation
 
@@ -68,10 +71,10 @@ and every residual/Jacobian/RHS component. The auto-derivative update is compile
 Unit3 tangent bases are additionally checked by finite differences of generated typed retraction,
 including directions at and near the positive-X chart singularity.
 
-After installing the dependencies and toolchain specified by the workflow:
+After installing dependencies, building `symenginepy`, and setting up the toolchain as in CI:
 
 ```bash
-export SYMFORCE_SYMBOLIC_API=sympy
+export SYMFORCE_SYMBOLIC_API=symengine
 export SYMFORCE_RUST_CODEGEN_TARGET=thumbv7em-none-eabihf
 export SYMFORCE_RUST_CODEGEN_EVIDENCE="$PWD/build/rust-validation/geometry-codegen"
 python tools/run_required_test.py test/symforce_rust_geometry_codegen_test.py

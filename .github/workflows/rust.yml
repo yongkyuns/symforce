@@ -112,7 +112,7 @@ jobs:
         run: |
           cmake -B build -D CMAKE_BUILD_TYPE=Release \
             -D SYMFORCE_PYTHON_OVERRIDE=python3.12 \
-            -D SYMFORCE_BUILD_SYMENGINE=OFF \
+            -D SYMFORCE_BUILD_SYMENGINE=ON \
             -D SYMFORCE_BUILD_CC_SYM=OFF \
             -D SYMFORCE_NO_FAST_MATH=ON \
             -D SYMFORCE_BUILD_BENCHMARKS=OFF
@@ -120,6 +120,7 @@ jobs:
         id: reference
         run: |
           cmake --build build --parallel 2 --target \
+            symenginepy \
             symforce_rust_imu_parity symforce_rust_imu_benchmark symforce_rust_ba_reference \
             bin.tests.symforce_examples_robot_2d_localization_test \
             bin.tests.symforce_examples_robot_3d_localization_test \
@@ -148,7 +149,6 @@ jobs:
             test/symforce_imu_parity_protocol_test.py \
             test/symforce_rust_example_parity_protocol_test.py \
             test/symforce_rust_codegen_runtime_test.py \
-            test/symforce_rust_geometry_codegen_test.py \
             test/symforce_rust_codegen_test.py \
             test/symforce_rust_stack_algebra_codegen_test.py \
             test/symforce_rust_camera_cross_language_test.py \
@@ -156,6 +156,22 @@ jobs:
             python tools/run_required_test.py "$test" 2>&1 | tee "build/rust-validation/$(basename "$test").log" || failed=1
           done
           exit "$failed"
+      - name: Fresh typed geometry and complete IMU generation
+        if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
+        env:
+          # Use the repository's vendored native symbolic engine for full IMU
+          # derivatives. Explicit selection fails rather than falling back.
+          SYMFORCE_SYMBOLIC_API: symengine
+        run: |
+          python - <<'PY' | tee build/rust-validation/symbolic-backend.txt
+          import symforce
+          import symengine
+          assert symforce.get_symbolic_api() == 'symengine'
+          print(symforce.get_symbolic_api())
+          print(symengine.__file__)
+          PY
+          python tools/run_required_test.py test/symforce_rust_geometry_codegen_test.py \
+            2>&1 | tee build/rust-validation/symforce_rust_geometry_codegen_test.py.log
       - name: Complete f32/f64 IMU state and factor parity
         if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
         run: |
