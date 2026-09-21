@@ -81,7 +81,11 @@ python tools/run_required_test.py test/symforce_rust_geometry_codegen_test.py
 ```
 
 The generated crate itself is `no_std`; CI executes its host tests and cross-compiles its library
-for the requested target. The evidence directory contains generated source, its Cargo.lock, and
+for the requested target. It also emits the six standard IMU functions once with a generic
+`T: Float + MatrixScalar + ReductionScalar` signature and requires that generic module to compile
+on both targets. Generic scalar mode is restricted to stack-algebra. An independent small generated
+function executes under both f32 and f64 so generic literal and method-printing paths are not merely
+compile-checked. The evidence directory contains generated source, its Cargo.lock, and
 compiler/test output, not build products. This is fresh concrete-scalar generation, not yet
 byte-for-byte regeneration of the checked-in scalar-generic runtime kernels.
 
@@ -125,7 +129,7 @@ guarantee.
 ## Deliberate boundaries
 
 This baseline does not redesign optimization APIs, generalize the dataset-specific BAL fast path,
-implement sparse generated outputs, or establish complete regeneration of every checked-in generic
-IMU kernel. The current executable example parity helper checks selected optimization results, not
+implement sparse generated outputs, or establish replacement/regeneration of the checked-in generic
+IMU runtime kernels. Generic generation is compile-qualified separately before any runtime switch. The current executable example parity helper checks selected optimization results, not
 every solver trajectory or failure mode. Those are separate follow-up workstreams; do not interpret
 the new CI as proving them.

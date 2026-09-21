@@ -1,6 +1,9 @@
 ***THIS MODULE IS EXPERIMENTAL***
 
-Backend for Rust. Both scalar precisions (``f32`` and ``f64``) are supported.
+Backend for Rust. Concrete scalar precisions (``f32`` and ``f64``) are supported. The
+``stack-algebra`` target also supports generic scalar emission as
+``T: Float + MatrixScalar + ReductionScalar``. Generic scalar mode is intentionally unavailable
+for nalgebra.
 The default ``nalgebra`` target supports scalar, vector, and matrix functions.
 The ``stack-algebra`` target additionally supports typed inputs, direct returns,
 and optional outputs for these ``symforce-rust`` storage types:
@@ -47,7 +50,12 @@ CI uses the repository's vendored SymEngine for this full-generation test while
 retaining SymPy for the original codegen/camera modules. It cross-compiles the
 fresh crate for ``thumbv7em-none-eabihf`` and retains source, lockfile, and logs.
 
-This does not yet provide a regeneration command for the existing checked-in
+The required fresh-generation contract also emits all six IMU functions in generic-``T`` mode and
+compiles that module on the host and ``thumbv7em-none-eabihf``. A smaller generated contract
+executes the same generic function with both f32 and f64, covering typed literals, rational values,
+reciprocals, sign, modulo, min/max, logarithm, and square root.
+
+This does not yet replace or provide a checked-in regeneration command for the existing
 scalar-generic IMU kernels. Those kernels and their runtime interfaces are
 unchanged by the typed-output support. See ``rust/symforce/VALIDATION.md`` for
 reproduction commands and the qualification boundaries.
