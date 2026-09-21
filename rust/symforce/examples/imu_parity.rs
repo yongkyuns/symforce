@@ -51,8 +51,18 @@ fn emit_factor<T: Real + MatrixScalar + ReductionScalar, const D: usize>(
             output.hessian[(row, col)] = output.hessian[(col, row)];
         }
     }
-    emit(scalar, case, &format!("{prefix}.residual"), &output.residual);
-    emit(scalar, case, &format!("{prefix}.jacobian"), &output.jacobian);
+    emit(
+        scalar,
+        case,
+        &format!("{prefix}.residual"),
+        &output.residual,
+    );
+    emit(
+        scalar,
+        case,
+        &format!("{prefix}.jacobian"),
+        &output.jacobian,
+    );
     emit(scalar, case, &format!("{prefix}.hessian"), &output.hessian);
     emit(scalar, case, &format!("{prefix}.rhs"), &output.rhs);
 }
