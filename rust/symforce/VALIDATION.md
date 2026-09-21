@@ -47,6 +47,36 @@ The numerical CI job checks out stack-algebra alongside SymForce at the exact ru
 revision, provides the generated C++/LCM headers, and runs the existing compilation and direct camera
 runtime comparisons without allowing their prerequisite checks to silently skip.
 
+### Typed geometry and fresh IMU generation
+
+`test/symforce_rust_geometry_codegen_test.py` covers all twelve supported geometry/camera types,
+including Unit3, in both scalar precisions. Direct returns and reused optional outputs must preserve
+storage, and the test exercises mixed outputs and a renamed geometry runtime dependency. Unrelated
+classes with matching names and geometry types on the nalgebra backend remain unsupported.
+
+The test calls the original `generate_manifold_imu_preintegration` entry point without symbolic
+storage wrappers or postprocessing. All six functions, including the auto-derivative update, are
+generated and compiled in f32/f64. The newly generated handwritten-derivative update, roll-forward,
+and all three factor functions are numerically compared against the existing C++-qualified Rust
+runtime. Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
+and every residual/Jacobian/RHS component. The auto-derivative update is compile-qualified only.
+Unit3 tangent bases are additionally checked by finite differences of generated typed retraction,
+including directions at and near the positive-X chart singularity.
+
+After installing the dependencies and toolchain specified by the workflow:
+
+```bash
+export SYMFORCE_SYMBOLIC_API=sympy
+export SYMFORCE_RUST_CODEGEN_TARGET=thumbv7em-none-eabihf
+export SYMFORCE_RUST_CODEGEN_EVIDENCE="$PWD/build/rust-validation/geometry-codegen"
+python tools/run_required_test.py test/symforce_rust_geometry_codegen_test.py
+```
+
+The generated crate itself is `no_std`; CI executes its host tests and cross-compiles its library
+for the requested target. The evidence directory contains generated source, its Cargo.lock, and
+compiler/test output, not build products. This is fresh concrete-scalar generation, not yet
+byte-for-byte regeneration of the checked-in scalar-generic runtime kernels.
+
 ## Complete IMU comparisons
 
 The paired IMU drivers emit a strict, shaped, row-major protocol. There are 12 deterministic cases
@@ -83,7 +113,7 @@ guarantee.
 ## Deliberate boundaries
 
 This baseline does not redesign optimization APIs, generalize the dataset-specific BAL fast path,
-implement missing Unit3 code-generation inputs or sparse generated outputs, or establish complete
-regeneration of every checked-in generic IMU kernel. The current executable example parity helper
-checks selected optimization results, not every solver trajectory or failure mode. Those are
-separate follow-up workstreams; do not interpret the new CI as proving them.
+implement sparse generated outputs, or establish complete regeneration of every checked-in generic
+IMU kernel. The current executable example parity helper checks selected optimization results, not
+every solver trajectory or failure mode. Those are separate follow-up workstreams; do not interpret
+the new CI as proving them.
