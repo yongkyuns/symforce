@@ -98,6 +98,13 @@ foreach(DRIVER parity benchmark)
   )
 endforeach()
 
+add_executable(symforce_rust_ba_reference ../tools/rust_bundle_adjustment_reference.cc)
+target_link_libraries(symforce_rust_ba_reference PRIVATE symforce_examples symforce_opt)
+set_target_properties(symforce_rust_ba_reference PROPERTIES
+  OUTPUT_NAME rust_bundle_adjustment_reference
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/tests
+)
+
 get_directory_property(have_parent_scope PARENT_DIRECTORY)
 if(have_parent_scope)
   set(SYMFORCE_CC_TEST_TARGETS "${SYMFORCE_CC_TEST_TARGETS}" PARENT_SCOPE)

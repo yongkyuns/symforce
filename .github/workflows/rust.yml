@@ -61,6 +61,8 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
+        # Explicit bash uses -eo pipefail; the implicit shell only enables -e.
+        shell: bash
         working-directory: symforce
     env:
       PYTHONPATH: ${{ github.workspace }}/symforce
@@ -70,6 +72,12 @@ jobs:
         with:
           path: symforce
           persist-credentials: false
+      - name: Verify failed producers cannot be hidden by tee
+        run: |
+          if (exit 23) | tee /dev/null; then
+            echo "Pipeline failure propagation is disabled" >&2
+            exit 1
+          fi
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -108,7 +116,7 @@ jobs:
         id: reference
         run: |
           cmake --build build --parallel 2 --target \
-            symforce_rust_imu_parity symforce_rust_imu_benchmark \
+            symforce_rust_imu_parity symforce_rust_imu_benchmark symforce_rust_ba_reference \
             bin.tests.symforce_examples_robot_2d_localization_test \
             bin.tests.symforce_examples_robot_3d_localization_test \
             bin.tests.symforce_examples_bundle_adjustment_test \
@@ -134,6 +142,7 @@ jobs:
           for test in \
             test/symforce_required_test_runner_test.py \
             test/symforce_imu_parity_protocol_test.py \
+            test/symforce_rust_example_parity_protocol_test.py \
             test/symforce_rust_codegen_runtime_test.py \
             test/symforce_rust_codegen_test.py \
             test/symforce_rust_stack_algebra_codegen_test.py \
