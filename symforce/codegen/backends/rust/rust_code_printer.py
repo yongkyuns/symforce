@@ -181,14 +181,14 @@ class RustCodePrinter(SympyRustCodePrinter):
         Customizations:
             * The first argument calls the max method on the second argument.
         """
-        return "{}.max({})".format(self._print(expr.args[0]), self._print(expr.args[1]))
+        return "{}.max({})".format(self._print_caller_var(expr.args[0]), self._print(expr.args[1]))
 
     def _print_Min(self, expr: sympy.Min) -> str:
         """
         Customizations:
             * The first argument calls the min method on the second argument.
         """
-        return "{}.min({})".format(self._print(expr.args[0]), self._print(expr.args[1]))
+        return "{}.min({})".format(self._print_caller_var(expr.args[0]), self._print(expr.args[1]))
 
     def _print_Mod(self, expr: sympy.Mod) -> str:
         """Print floating-point modulo with Rust's non-negative remainder semantics."""
@@ -207,7 +207,7 @@ class RustCodePrinter(SympyRustCodePrinter):
         """
         Customizations:
         """
-        return "{}.ln()".format(self._print(expr.args[0]))
+        return "{}.ln()".format(self._print_caller_var(expr.args[0]))
 
     def _print_Rational(self, expr: sympy.Rational) -> str:
         p, q = int(expr.p), int(expr.q)
@@ -236,4 +236,4 @@ class RustCodePrinter(SympyRustCodePrinter):
         # SignNoZero can wrap an arbitrary expression (SymEngine commonly reduces
         # copysign_no_zero(1, a + b) to this form). Rust method-call precedence would
         # otherwise bind signum only to the final term and change the mathematics.
-        return f"({self._print(expr.args[0])}).signum()"
+        return f"{self._print_caller_var(expr.args[0])}.signum()"

@@ -119,6 +119,16 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
         ).printer().doprint(sf.sign_no_zero(x + y))
         self.assertEqual(generated, "(x + y).signum()")
 
+    def test_method_printers_parenthesize_composite_receivers(self) -> None:
+        x, y = sf.Symbol("x"), sf.Symbol("y")
+        printer = RustConfig(
+            scalar_type=ScalarType.DOUBLE,
+            algebra=RustAlgebra.STACK_ALGEBRA,
+        ).printer()
+        self.assertEqual(printer.doprint(sf.log(x + y)), "(x + y).ln()")
+        self.assertEqual(printer.doprint(sf.Max(x + y, x - y)), "(x + y).max(x - y)")
+        self.assertEqual(printer.doprint(sf.Min(x + y, x - y)), "(x + y).min(x - y)")
+
     def test_atan_camera_expression_matches_cpp(self) -> None:
         def project(point: sf.V3, calibration: sf.ATANCameraCal, epsilon: sf.Scalar) -> sf.V2:
             pixel, _ = calibration.pixel_from_camera_point(point, epsilon)
