@@ -1,4 +1,5 @@
-"""Run one unittest module, failing on skips, expected failures, or an empty suite.
+"""
+Run one unittest module, failing on skips, expected failures, or an empty suite.
 
 Run modules in separate processes: SymForce symbolic backend/epsilon settings are global.
 This wrapper leaves optional developer tests optional outside the required CI gate.

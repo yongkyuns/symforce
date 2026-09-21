@@ -14,7 +14,8 @@ SPEC.loader.exec_module(parity)
 
 
 class ExampleParityProtocolTest(unittest.TestCase):
-    def test_matching_pose_and_metrics_pass(self) -> None:
+    @staticmethod
+    def test_matching_pose_and_metrics_pass() -> None:
         metrics = parity.parse_metrics(
             "iterations: 7\nfinal error: 1.25\npose 1: (0, 0, 0, 1, 2, 3, 4)\n", "fixture"
         )
@@ -27,9 +28,12 @@ class ExampleParityProtocolTest(unittest.TestCase):
                 parity.assert_close("fixture", (1.25, 7, pose), actual, require_pose=True)
 
     def test_empty_and_nonfinite_metrics_fail(self) -> None:
-        for text in ("", "iterations: 7\nfinal error: 1e999\n",
-                     "iterations: 7\nfinal error: -1\n",
-                     "iterations: 7\nfinal error: 1\npose 1: (0,0,nan,1,2,3,4)\n"):
+        for text in (
+            "",
+            "iterations: 7\nfinal error: 1e999\n",
+            "iterations: 7\nfinal error: -1\n",
+            "iterations: 7\nfinal error: 1\npose 1: (0,0,nan,1,2,3,4)\n",
+        ):
             with self.subTest(text=text), self.assertRaises(RuntimeError):
                 parity.parse_metrics(text, "fixture")
 

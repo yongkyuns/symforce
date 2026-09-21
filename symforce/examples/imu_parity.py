@@ -23,12 +23,14 @@ FIELD_SHAPES = {
     "velocity": (3, 1),
 }
 for _prefix, _dimension in (("imu", 24), ("gravity", 27), ("direction", 26)):
-    FIELD_SHAPES.update({
-        f"{_prefix}.residual": (9, 1),
-        f"{_prefix}.jacobian": (9, _dimension),
-        f"{_prefix}.hessian": (_dimension, _dimension),
-        f"{_prefix}.rhs": (_dimension, 1),
-    })
+    FIELD_SHAPES.update(
+        {
+            f"{_prefix}.residual": (9, 1),
+            f"{_prefix}.jacobian": (9, _dimension),
+            f"{_prefix}.hessian": (_dimension, _dimension),
+            f"{_prefix}.rhs": (_dimension, 1),
+        }
+    )
 EXPECTED_KEYS = {
     (scalar, case, field)
     for scalar in SCALARS
@@ -87,7 +89,8 @@ def assert_parity(cpp: Records, rust: Records) -> dict:
             relative, absolute = 2e-10, 1e-11
         else:
             relative = 2e-4
-            absolute = 1e-6 * max(max(abs(value) for value in reference), 1e-30)
+            field_scale = max(abs(value) for value in reference)
+            absolute = 1e-6 * max(field_scale, 1e-30)
         max_error = 0.0
         max_budget_fraction = 0.0
         columns = FIELD_SHAPES[key[2]][1]
@@ -102,14 +105,24 @@ def assert_parity(cpp: Records, rust: Records) -> dict:
                     f"C++={expected:.17g}, Rust={observed:.17g}, budget={budget:.3g}"
                 )
         value_count += len(reference)
-        fields.append({
-            "scalar": key[0], "case": key[1], "field": key[2],
-            "max_absolute_error": max_error, "max_budget_fraction": max_budget_fraction,
-        })
+        fields.append(
+            {
+                "scalar": key[0],
+                "case": key[1],
+                "field": key[2],
+                "max_absolute_error": max_error,
+                "max_budget_fraction": max_budget_fraction,
+            }
+        )
     if failures:
         raise RuntimeError("IMU parity mismatch:\n" + "\n".join(failures))
-    return {"passed": True, "cases_per_scalar": CASE_COUNT, "values_compared": value_count,
-            "records": len(fields), "fields": fields}
+    return {
+        "passed": True,
+        "cases_per_scalar": CASE_COUNT,
+        "values_compared": value_count,
+        "records": len(fields),
+        "fields": fields,
+    }
 
 
 def run(command: list[str], root: Path, evidence: Path, name: str) -> str:
@@ -137,8 +150,17 @@ def main() -> int:
     evidence.mkdir(parents=True, exist_ok=True)
     commands = {
         "cpp": [str(cpp_binary)],
-        "rust": ["cargo", "run", "--locked", "--release", "--quiet", "--manifest-path",
-                 str(manifest), "--example", "imu_parity"],
+        "rust": [
+            "cargo",
+            "run",
+            "--locked",
+            "--release",
+            "--quiet",
+            "--manifest-path",
+            str(manifest),
+            "--example",
+            "imu_parity",
+        ],
     }
     (evidence / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
     try:
