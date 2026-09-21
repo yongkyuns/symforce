@@ -77,7 +77,7 @@ def assert_parity(cpp: Records, rust: Records) -> dict:
     validate(cpp, "C++")
     validate(rust, "Rust")
     fields = []
-    failures = []
+    failures: list[str] = []
     value_count = 0
     for key in sorted(EXPECTED_KEYS):
         reference, actual = cpp[key], rust[key]
