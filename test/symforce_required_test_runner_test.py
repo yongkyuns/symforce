@@ -10,7 +10,8 @@ RUNNER = Path(__file__).resolve().parents[1] / "tools" / "run_required_test.py"
 
 
 class RequiredTestRunnerTest(unittest.TestCase):
-    def run_module(self, source: str) -> subprocess.CompletedProcess:
+    @staticmethod
+    def run_module(source: str) -> subprocess.CompletedProcess:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "fixture_test.py"
             path.write_text(source)

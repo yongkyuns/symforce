@@ -146,7 +146,7 @@ fn geometry_input_contract() {
 
 class RustCodegenRuntimeTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("cargo") and shutil.which("rustfmt"), "Rust tools missing")
-    def test_generated_contracts_execute(self) -> None:  # noqa: PLR0914
+    def test_generated_contracts_execute(self) -> None:
         repo = Path(__file__).resolve().parents[1]
         runtime = repo / "rust" / "symforce"
         stack_dependency = next(
@@ -189,18 +189,20 @@ class RustCodegenRuntimeTest(unittest.TestCase):
                     ).generate_function(module_dir, skip_directory_nesting=True)
                     names.append("multiple_outputs")
 
-                    def matrix_type(rows: int, columns: int) -> str:
-                        if algebra is RustAlgebra.STACK_ALGEBRA:
-                            return f"stack_algebra::Matrix<{rows}, {columns}, {rust_scalar}>"
-                        return f"nalgebra::SMatrix<{rust_scalar}, {rows}, {columns}>"
+                    def matrix_type(
+                        rows: int, columns: int, matrix_algebra: RustAlgebra, scalar_name: str
+                    ) -> str:
+                        if matrix_algebra is RustAlgebra.STACK_ALGEBRA:
+                            return f"stack_algebra::Matrix<{rows}, {columns}, {scalar_name}>"
+                        return f"nalgebra::SMatrix<{scalar_name}, {rows}, {columns}>"
 
                     substitutions = {
                         "SCALAR": rust_scalar,
-                        "M23": matrix_type(2, 3),
-                        "M32": matrix_type(3, 2),
-                        "V1": matrix_type(1, 1),
-                        "V3": matrix_type(3, 1),
-                        "V17": matrix_type(17, 1),
+                        "M23": matrix_type(2, 3, algebra, rust_scalar),
+                        "M32": matrix_type(3, 2, algebra, rust_scalar),
+                        "V1": matrix_type(1, 1, algebra, rust_scalar),
+                        "V3": matrix_type(3, 1, algebra, rust_scalar),
+                        "V17": matrix_type(17, 1, algebra, rust_scalar),
                         "GEOMETRY": "",
                     }
                     if algebra is RustAlgebra.STACK_ALGEBRA:
