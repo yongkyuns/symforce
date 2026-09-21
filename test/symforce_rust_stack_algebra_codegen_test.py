@@ -111,6 +111,14 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
         )
         self.assertIn("(x + y)/scale", generated)
 
+    def test_sign_no_zero_parenthesizes_composite_argument(self) -> None:
+        x, y = sf.Symbol("x"), sf.Symbol("y")
+        generated = RustConfig(
+            scalar_type=ScalarType.DOUBLE,
+            algebra=RustAlgebra.STACK_ALGEBRA,
+        ).printer().doprint(sf.sign_no_zero(x + y))
+        self.assertEqual(generated, "(x + y).signum()")
+
     def test_atan_camera_expression_matches_cpp(self) -> None:
         def project(point: sf.V3, calibration: sf.ATANCameraCal, epsilon: sf.Scalar) -> sf.V2:
             pixel, _ = calibration.pixel_from_camera_point(point, epsilon)

@@ -233,4 +233,7 @@ class RustCodePrinter(SympyRustCodePrinter):
         return f"(if ({arg} == 0.0) {{0.0}} else {{({arg}).signum()}})"
 
     def _print_SignNoZero(self, expr: sf.SymPySignNoZero) -> str:
-        return f"{self._print(expr.args[0])}.signum()"
+        # SignNoZero can wrap an arbitrary expression (SymEngine commonly reduces
+        # copysign_no_zero(1, a + b) to this form). Rust method-call precedence would
+        # otherwise bind signum only to the final term and change the mathematics.
+        return f"({self._print(expr.args[0])}).signum()"
