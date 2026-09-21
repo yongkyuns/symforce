@@ -296,6 +296,14 @@ class RustGeometryCodegenTest(unittest.TestCase):
                 self.assertEqual(
                     {path.stem for path in generic_module.glob("*.rs")}, IMU_MODULES
                 )
+                generic_rotation = sf.Rot3.symbolic("generic_rotation")
+                Codegen(
+                    inputs=Values(value=generic_rotation),
+                    outputs=Values(result=generic_rotation),
+                    return_key="result",
+                    name="generic_normalized_rot3",
+                    config=replace(generic_config, normalize_results=True),
+                ).generate_function(generic_module, skip_directory_nesting=True)
                 (generic_module / "mod.rs").write_text(
                     "\n".join(f"mod {path.stem};" for path in sorted(generic_module.glob("*.rs")))
                     + "\n"

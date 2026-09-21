@@ -187,7 +187,11 @@
     if _{{ name }}_squared_norm > {{ format_zero(spec) }} {
         let _{{ name }}_norm = _{{ name }}_squared_norm.sqrt();
         {% for i in range(normalize_dim) %}
+        {% if spec.config.scalar_type.name == "GENERIC" %}
+        {{ name }}[{{ i }}] = {{ name }}[{{ i }}] / _{{ name }}_norm;
+        {% else %}
         {{ name }}[{{ i }}] /= _{{ name }}_norm;
+        {% endif %}
         {% endfor %}
     }
     {% endif %}
