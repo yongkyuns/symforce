@@ -14,8 +14,18 @@
         f32
     {%- elif spec.config.scalar_type.name == "DOUBLE" -%}
         f64
+    {%- elif spec.config.scalar_type.name == "GENERIC" -%}
+        T
     {%- else -%}
         {{ raise("Unsupported scalar type: {}".format(spec.config.scalar_type)) }}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro format_zero(spec) -%}
+    {%- if spec.config.scalar_type.name == "GENERIC" -%}
+        T::zero()
+    {%- else -%}
+        0.0
     {%- endif -%}
 {%- endmacro -%}
 
@@ -153,7 +163,7 @@
  #}
 {%- macro function_declaration(spec) -%}
 {% set name = spec.name %}
-    pub fn {{ name }}({{- input_args_declaration(spec) | indent(width=4) -}}) -> {{ get_return_type(spec) | indent(width=8)}}
+    pub fn {{ name }}{% if spec.config.scalar_type.name == "GENERIC" %}<T: Float + MatrixScalar + ReductionScalar>{% endif %}({{- input_args_declaration(spec) | indent(width=4) -}}) -> {{ get_return_type(spec) | indent(width=8)}}
 {%- endmacro -%}
 
 {# ------------------------------------------------------------------------- #}
@@ -174,7 +184,7 @@
     {% if normalize_dim %}
     // Project only the constrained storage prefix; preserve pose translations.
     let _{{ name }}_squared_norm = {% for i in range(normalize_dim) %}{{ name }}[{{ i }}] * {{ name }}[{{ i }}]{% if not loop.last %} + {% endif %}{% endfor %};
-    if _{{ name }}_squared_norm > 0.0 {
+    if _{{ name }}_squared_norm > {{ format_zero(spec) }} {
         let _{{ name }}_norm = _{{ name }}_squared_norm.sqrt();
         {% for i in range(normalize_dim) %}
         {{ name }}[{{ i }}] /= _{{ name }}_norm;

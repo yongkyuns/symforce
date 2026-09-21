@@ -18,7 +18,9 @@ pub mod {{ spec.namespace }} {
     unused_variables,
 )]
 
-{% if spec.config.algebra.name == "STACK_ALGEBRA" %}
+{% if spec.config.scalar_type.name == "GENERIC" %}
+use stack_algebra::{Float, MatrixScalar, ReductionScalar};
+{% elif spec.config.algebra.name == "STACK_ALGEBRA" %}
 #[allow(unused_imports)]
 use stack_algebra::Float;
 {% endif %}

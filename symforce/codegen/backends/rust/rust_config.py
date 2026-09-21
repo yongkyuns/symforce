@@ -60,6 +60,13 @@ class RustConfig(CodegenConfig):
     geometry_crate: str = "symforce-rust"
     inline: bool = False
 
+    def __post_init__(self) -> None:
+        if (
+            self.scalar_type is rust_code_printer.ScalarType.GENERIC
+            and self.algebra is not RustAlgebra.STACK_ALGEBRA
+        ):
+            raise ValueError("Generic Rust scalar generation requires stack-algebra")
+
     @property
     def geometry_crate_name(self) -> str:
         """Return the Rust module identifier for the geometry crate."""
