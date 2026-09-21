@@ -181,6 +181,8 @@ class RustGeometryCodegenTest(unittest.TestCase):
                 )
         self.assertFalse(stack.supports_geometry_type(sf.V3))
         self.assertFalse(stack.supports_geometry_type(float))
+        with self.assertRaisesRegex(ValueError, "requires stack-algebra"):
+            RustConfig(algebra=RustAlgebra.NALGEBRA, scalar_type=ScalarType.GENERIC)
 
     def test_nalgebra_rejects_geometry_inputs_and_outputs(self) -> None:
         direction = sf.Unit3.symbolic("direction")
@@ -282,7 +284,25 @@ class RustGeometryCodegenTest(unittest.TestCase):
                         + contracts
                         + "\n}\n"
                     )
-                (src / "lib.rs").write_text("#![no_std]\nmod f32;\nmod f64;\n")
+                generic_module = src / "generic"
+                generic_module.mkdir()
+                generic_config = RustConfig(
+                    algebra=RustAlgebra.STACK_ALGEBRA,
+                    scalar_type=ScalarType.GENERIC,
+                    geometry_crate="geometry-runtime",
+                    normalize_results=False,
+                )
+                generate_manifold_imu_preintegration(generic_config, generic_module)
+                self.assertEqual(
+                    {path.stem for path in generic_module.glob("*.rs")}, IMU_MODULES
+                )
+                (generic_module / "mod.rs").write_text(
+                    "\n".join(f"mod {path.stem};" for path in sorted(generic_module.glob("*.rs")))
+                    + "\n"
+                )
+                (src / "lib.rs").write_text(
+                    "#![no_std]\nmod f32;\nmod f64;\nmod generic;\n"
+                )
                 manifest = root / "Cargo.toml"
                 manifest.write_text(
                     '[package]\nname = "symforce-rust-geometry-contracts"\n'

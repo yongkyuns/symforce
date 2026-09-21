@@ -30,6 +30,111 @@ from symforce.test_util import TestCase
 class SymforceRustStackAlgebraCodegenTest(TestCase):
     """Ensure the Rust backend can target stack-algebra without nalgebra."""
 
+    def test_generic_scalar_requires_stack_algebra(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires stack-algebra"):
+            RustConfig(algebra=RustAlgebra.NALGEBRA, scalar_type=ScalarType.GENERIC)
+
+    @unittest.skipIf(shutil.which("cargo") is None, "cargo is not installed")
+    def test_generic_scalar_function_executes_for_f32_and_f64(self) -> None:
+        stack_algebra_dir = Path(__file__).resolve().parents[2] / "stack-algebra"
+        if not stack_algebra_dir.is_dir():
+            self.skipTest(f"local stack-algebra checkout not found at {stack_algebra_dir}")
+
+        output_dir = self.make_output_dir("symforce_rust_generic_scalar_codegen")
+        source_dir = output_dir / "src"
+        source_dir.mkdir()
+
+        def generic_math(x: sf.Scalar, y: sf.Scalar) -> sf.Matrix:
+            return sf.Matrix(
+                [
+                    x + sf.Rational(1, 2),
+                    sf.sqrt(x * x + 1),
+                    sf.sign_no_zero(x + y),
+                    sf.Mod(x, sf.Rational(5, 2)),
+                    sf.Max(x + y, 0),
+                    sf.log(x * x + 1),
+                ]
+            )
+
+        Codegen.function(
+            generic_math,
+            config=RustConfig(
+                scalar_type=ScalarType.GENERIC,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            ),
+        ).generate_function(source_dir, skip_directory_nesting=True)
+
+        (output_dir / "Cargo.toml").write_text(
+            textwrap.dedent(
+                f"""
+                [package]
+                name = "symforce-rust-generic-scalar-codegen"
+                version = "0.1.0"
+                edition = "2021"
+
+                [dependencies]
+                stack-algebra = {{ path = "{stack_algebra_dir}" }}
+                """
+            ).strip()
+            + "\n"
+        )
+        (source_dir / "lib.rs").write_text(
+            """#![no_std]
+mod generic_math;
+
+#[cfg(test)]
+mod tests {
+    use super::generic_math::sym::generic_math;
+
+    fn check_f32(x: f32, y: f32) {
+        let actual = generic_math::<f32>(x, y);
+        let expected = [
+            x + 0.5,
+            (x * x + 1.0).sqrt(),
+            (x + y).signum(),
+            x.rem_euclid(2.5),
+            (x + y).max(0.0),
+            (x * x + 1.0).ln(),
+        ];
+        for index in 0..6 {
+            assert!((actual[index] - expected[index]).abs() < 1e-5);
+        }
+    }
+
+    fn check_f64(x: f64, y: f64) {
+        let actual = generic_math::<f64>(x, y);
+        let expected = [
+            x + 0.5,
+            (x * x + 1.0).sqrt(),
+            (x + y).signum(),
+            x.rem_euclid(2.5),
+            (x + y).max(0.0),
+            (x * x + 1.0).ln(),
+        ];
+        for index in 0..6 {
+            assert!((actual[index] - expected[index]).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn generic_math_executes_in_both_precisions() {
+        for (x, y) in [(-3.0, 0.5), (-0.25, 1.0), (2.0, -4.0)] {
+            check_f32(x as f32, y as f32);
+            check_f64(x, y);
+        }
+    }
+}
+"""
+        )
+
+        result = subprocess.run(
+            ["cargo", "test", "--manifest-path", output_dir / "Cargo.toml"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     @unittest.skipIf(shutil.which("cargo") is None, "cargo is not installed")
     def test_vector_matrix_function_compiles(self) -> None:
         stack_algebra_dir = Path(__file__).resolve().parents[2] / "stack-algebra"
