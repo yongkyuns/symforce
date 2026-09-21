@@ -52,7 +52,7 @@ def zero_return(x: sf.Scalar) -> sf.Matrix23:
 
 
 def transpose_return(matrix: sf.Matrix23) -> sf.Matrix32:
-    return matrix.T
+    return sf.Matrix32(matrix.T)
 
 
 def multiple_outputs(x: sf.Scalar) -> tuple[sf.Matrix23, sf.Scalar, sf.V3]:
