@@ -48,7 +48,7 @@ def large_return(x: sf.Scalar) -> sf.Matrix:
 
 
 def zero_return(x: sf.Scalar) -> sf.Matrix23:
-    return sf.Matrix23.zeros()
+    return sf.Matrix23([[0, 0, 0], [0, 0, 0]])
 
 
 def transpose_return(matrix: sf.Matrix23) -> sf.Matrix32:
@@ -103,7 +103,7 @@ fn scalar_and_shape_contracts() {
             }
         }
         let mut output: $M23 = <$M23>::zeros();
-        output[(0, 1)] = 999.0; // An omitted zero must overwrite reused output storage.
+        output[(0, 1)] = 999.0;
         let mut cost: $SCALAR = 999.0;
         let mut vector: $V3 = <$V3>::zeros();
         multiple_outputs::sym::multiple_outputs(
@@ -149,7 +149,6 @@ class RustCodegenRuntimeTest(unittest.TestCase):
     def test_generated_contracts_execute(self) -> None:  # noqa: PLR0914
         repo = Path(__file__).resolve().parents[1]
         runtime = repo / "rust" / "symforce"
-        # Use the same Git revision as the runtime to avoid duplicate incompatible matrix types.
         stack_dependency = next(
             line
             for line in (runtime / "Cargo.toml").read_text().splitlines()

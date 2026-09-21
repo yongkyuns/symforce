@@ -105,6 +105,7 @@ jobs:
             -D SYMFORCE_NO_FAST_MATH=ON \
             -D SYMFORCE_BUILD_BENCHMARKS=OFF
       - name: Build C++ qualification drivers and example references
+        id: reference
         run: |
           cmake --build build --parallel 2 --target \
             symforce_rust_imu_parity symforce_rust_imu_benchmark \
@@ -122,22 +123,40 @@ jobs:
             rustc --version --verbose
             cargo --version
             c++ --version
+            lscpu
           } > build/rust-validation/toolchains.txt
           cp rust/symforce/Cargo.lock build/rust-validation/runtime-Cargo.lock
+          cp build/CMakeCache.txt build/rust-validation/CMakeCache.txt
       - name: Required generated-code tests (no skipped or empty suites)
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          failed=0
           for test in \
             test/symforce_required_test_runner_test.py \
+            test/symforce_imu_parity_protocol_test.py \
             test/symforce_rust_codegen_runtime_test.py \
             test/symforce_rust_codegen_test.py \
             test/symforce_rust_stack_algebra_codegen_test.py \
             test/symforce_rust_camera_cross_language_test.py \
             test/symforce_examples_*_rust_codegen_test.py; do
-            python tools/run_required_test.py "$test" 2>&1 | tee "build/rust-validation/$(basename "$test").log"
+            python tools/run_required_test.py "$test" 2>&1 | tee "build/rust-validation/$(basename "$test").log" || failed=1
           done
+          exit "$failed"
+      - name: Complete f32/f64 IMU state and factor parity
+        if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
+        run: |
+          python symforce/examples/imu_parity.py \
+            --cpp-binary bin/tests/imu_preintegration_parity \
+            --output-dir build/rust-validation/imu 2>&1 | tee build/rust-validation/imu.log
       - name: End-to-end localization and bundle-adjustment parity
+        if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
         run: python symforce/examples/rust_parity.py --build-dir build 2>&1 | tee build/rust-validation/examples.log
+      - name: Execute comparative IMU benchmark
+        if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
+        run: |
+          python symforce/examples/imu_benchmark.py \
+            --cpp-binary bin/tests/imu_preintegration_benchmark --runs 3 \
+            2>&1 | tee build/rust-validation/benchmark.log
       - name: Upload numerical qualification evidence
         if: always()
         uses: actions/upload-artifact@v7
