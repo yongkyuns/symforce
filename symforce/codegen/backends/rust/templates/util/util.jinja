@@ -47,28 +47,8 @@
             {% else %}
                 {{ format_matrix(T, name, spec) }}
             {% endif %}
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Rot2" %}
-            {{ spec.config.geometry_crate_name }}::Rot2<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Pose2" %}
-            {{ spec.config.geometry_crate_name }}::Pose2<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Rot3" %}
-            {{ spec.config.geometry_crate_name }}::Rot3<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "Pose3" %}
-            {{ spec.config.geometry_crate_name }}::Pose3<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "LinearCameraCal" %}
-            {{ spec.config.geometry_crate_name }}::LinearCameraCal<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "ATANCameraCal" %}
-            {{ spec.config.geometry_crate_name }}::ATANCameraCal<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "PolynomialCameraCal" %}
-            {{ spec.config.geometry_crate_name }}::PolynomialCameraCal<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "DoubleSphereCameraCal" %}
-            {{ spec.config.geometry_crate_name }}::DoubleSphereCameraCal<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "SphericalCameraCal" %}
-            {{ spec.config.geometry_crate_name }}::SphericalCameraCal<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "OrthographicCameraCal" %}
-            {{ spec.config.geometry_crate_name }}::OrthographicCameraCal<{{ format_scalar(spec) }}>
-        {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ == "EquirectangularCameraCal" %}
-            {{ spec.config.geometry_crate_name }}::EquirectangularCameraCal<{{ format_scalar(spec) }}>
+        {% elif spec.config.supports_geometry_type(T) %}
+            {{ spec.config.geometry_crate_name }}::{{ T.__name__ }}<{{ format_scalar(spec) }}>
         {% else %}
             {{ raise("Unsupported type {} for value {}".format(T, name)) }}
         {% endif %}
@@ -84,13 +64,7 @@
  #}
 {%- macro get_return_type(spec) -%}
     {%- if spec.return_key is not none -%}
-        {% set type = spec.outputs[spec.return_key] %}
-        {% set T = typing_util.get_type(type) %}
-        {% if is_symbolic(type) or T.__name__ == "float" or issubclass(T, Matrix) %}
-            {{ format_typename(spec.return_key, type, spec) }}
-        {% else %}
-            {{ raise("Unsupported return type: {}".format(T)) }}
-        {% endif %}
+        {{ format_typename(spec.return_key, spec.outputs[spec.return_key], spec) }}
     {%- else -%}
         ()
     {%- endif -%}
@@ -125,9 +99,7 @@
     {%- set T = typing_util.get_type(T_or_value) -%}
     {% if T.__name__ == "Symbol" %}
      {{ name }}: {{ format_scalar(spec) }}
-    {% elif issubclass(T, Matrix) %}
-        {{ name }}: &{{ format_typename(name, T_or_value, spec) }}
-    {% elif spec.config.algebra.name == "STACK_ALGEBRA" and T.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal", "PolynomialCameraCal", "DoubleSphereCameraCal", "SphericalCameraCal", "OrthographicCameraCal", "EquirectangularCameraCal") -%}
+    {% elif issubclass(T, Matrix) or spec.config.supports_geometry_type(T) %}
         {{ name }}: &{{ format_typename(name, T_or_value, spec) }}
     {%- else -%}
         {{ raise('Unsupported type {} for input "{}"'.format(T, name)) }}
@@ -169,7 +141,7 @@
                 , {% endif -%}
             {% endif -%}
         {%- endif -%}
-    {%- endfor -%}
+    {%- endfor %}
 {% endmacro -%}
 
 {# ------------------------------------------------------------------------- #}
@@ -186,6 +158,22 @@
 
 {# ------------------------------------------------------------------------- #}
 
+{# Construct a typed geometry/camera output through its storage interface.
+ # Output lvalues from codegen_util are name[index]. The local storage buffer is
+ # scoped inside an expression, so optional-output pointers are not shadowed at
+ # their assignment site. No mutable access to a runtime object's data is needed.
+ #}
+{% macro geometry_output(name, type, terms, spec) -%}
+{% set T = typing_util.get_type(type) %}
+{
+    let {% if terms %}mut {% endif %}{{ name }} = stack_algebra::Matrix::<{{ T.storage_dim() }}, 1, {{ format_scalar(spec) }}>::zeros();
+    {% for lhs, rhs in terms %}
+    {{ lhs }} = {{ rhs }};
+    {% endfor %}
+    <{{ format_typename(name, type, spec) | trim }}>::from_storage({{ name }})
+}
+{%- endmacro %}
+
 {# Helper to generate code to fill out an output returned as an output pointer
  #
  # Args:
@@ -201,6 +189,8 @@
     {% endfor %}
 {% elif is_symbolic(type) or T.__name__ == "float" %}
     *{{ name }} = {{ terms[0][1] }};
+{% elif spec.config.supports_geometry_type(T) %}
+    *{{ name }} = {{ geometry_output(name, type, terms, spec) }};
 {% else %}
     {{ raise('Unsupported return type for Rust: name="{}", type=`{}`'.format(name, T)) }}
 {% endif %}
@@ -248,7 +238,7 @@
 
     {% for name, type in spec.inputs.items() %}
     {% set input_type = typing_util.get_type(type) %}
-    {% if input_type.__name__ in ("Rot2", "Pose2", "Rot3", "Pose3", "LinearCameraCal", "ATANCameraCal", "PolynomialCameraCal", "DoubleSphereCameraCal", "SphericalCameraCal", "OrthographicCameraCal", "EquirectangularCameraCal") %}
+    {% if spec.config.supports_geometry_type(input_type) %}
     // Input storage for geometry values
     let _{{ name }} = {{ name }}.data();
     {% endif %}
@@ -283,8 +273,10 @@
                 {{ lhs }} = {{ rhs }};
                 {% endfor %}
                 {{ name }}
+            {% elif spec.config.supports_geometry_type(T_return) %}
+                {{ geometry_output(name, type, terms, spec) }}
             {% else %}
-            {{ raise("Cannot return an output of type {}: The Rust backend only supports returning scalars, vectors, and matrices.".format(T_return)) }}
+            {{ raise("Cannot return an output of type {}: The Rust backend only supports returning scalars, vectors, matrices, and supported runtime geometry types.".format(T_return)) }}
             {% endif %}
         {% endif %}
     {% endfor %}

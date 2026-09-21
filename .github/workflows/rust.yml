@@ -67,6 +67,8 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}/symforce
       SYMFORCE_SYMBOLIC_API: sympy
+      SYMFORCE_RUST_CODEGEN_TARGET: thumbv7em-none-eabihf
+      SYMFORCE_RUST_CODEGEN_EVIDENCE: ${{ github.workspace }}/symforce/build/rust-validation/geometry-codegen
     steps:
       - uses: actions/checkout@v6
         with:
@@ -98,7 +100,9 @@ jobs:
           path: stack-algebra
           persist-credentials: false
       - name: Install pinned Rust toolchain
-        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustfmt
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustfmt
+          rustup target add thumbv7em-none-eabihf
       - name: Install reference build dependencies
         run: |
           sudo apt-get update
@@ -144,6 +148,7 @@ jobs:
             test/symforce_imu_parity_protocol_test.py \
             test/symforce_rust_example_parity_protocol_test.py \
             test/symforce_rust_codegen_runtime_test.py \
+            test/symforce_rust_geometry_codegen_test.py \
             test/symforce_rust_codegen_test.py \
             test/symforce_rust_stack_algebra_codegen_test.py \
             test/symforce_rust_camera_cross_language_test.py \

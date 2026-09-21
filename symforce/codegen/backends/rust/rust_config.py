@@ -65,6 +65,33 @@ class RustConfig(CodegenConfig):
         """Return the Rust module identifier for the geometry crate."""
         return self.geometry_crate.replace("-", "_")
 
+    def supports_geometry_type(self, value_type: T.Type) -> bool:
+        """Whether a symbolic type has the Rust runtime's storage interface.
+
+        Keep argument types, input storage, and output construction on one boundary.
+        Exact type identity avoids accepting an unrelated class with the same name.
+        The import is deferred until code generation to avoid an initialization cycle.
+        """
+        if self.algebra is not RustAlgebra.STACK_ALGEBRA:
+            return False
+
+        import symforce.symbolic as sf
+
+        return value_type in (
+            sf.Rot2,
+            sf.Pose2,
+            sf.Rot3,
+            sf.Pose3,
+            sf.Unit3,
+            sf.LinearCameraCal,
+            sf.ATANCameraCal,
+            sf.PolynomialCameraCal,
+            sf.DoubleSphereCameraCal,
+            sf.SphericalCameraCal,
+            sf.OrthographicCameraCal,
+            sf.EquirectangularCameraCal,
+        )
+
     @classmethod
     def backend_name(cls) -> str:
         return "rust"
