@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 import symforce
@@ -21,11 +22,12 @@ from symforce.codegen import Codegen
 from symforce.codegen.backends.rust import RustAlgebra
 from symforce.codegen.backends.rust import RustConfig
 from symforce.codegen.backends.rust import ScalarType
+from symforce.codegen.codegen import CodeGenerationException
 from symforce.slam.imu_preintegration.generate import generate_manifold_imu_preintegration
 from symforce.values import Values
 
-# Independently enumerate the public storage contract; do not derive test cases from
-# the implementation's supported-type predicate, which could accidentally omit a type.
+# Independently enumerate the public contract rather than deriving test cases from
+# the implementation's predicate, which could accidentally omit a supported type.
 GEOMETRY_TYPES = (
     sf.Rot2,
     sf.Pose2,
@@ -40,6 +42,7 @@ GEOMETRY_TYPES = (
     sf.OrthographicCameraCal,
     sf.EquirectangularCameraCal,
 )
+NORMALIZED_PREFIX_DIMS = {"Rot2": 2, "Pose2": 2, "Rot3": 4, "Pose3": 4, "Unit3": 3}
 IMU_MODULES = {
     "imu_manifold_preintegration_update",
     "imu_manifold_preintegration_update_auto_derivative",
@@ -60,11 +63,11 @@ def unit3_basis(direction: sf.Unit3, epsilon: sf.Scalar) -> sf.Matrix32:
 
 def storage_contract(type_name: str, size: int) -> str:
     name = type_name.lower()
+    normalized_dim = NORMALIZED_PREFIX_DIMS.get(type_name, 0)
     return f"""
 #[test]
 fn storage_{name}() {{
-    // from_storage/data is a representation-preserving interface, not normalization.
-    // Include zero components to catch stale data in reused output objects.
+    // Raw mode must preserve storage, including zeros in reused output objects.
     let mut storage = Matrix::<{size}, 1, Scalar>::zeros();
     for index in 0..{size} {{
         storage[index] = (index as Scalar) * 0.125;
@@ -87,6 +90,42 @@ fn storage_{name}() {{
     assert_eq!(optional_{name}::sym::optional_{name}(&input, None, Some(&mut vector)), total);
     assert_eq!(*input.data(), storage);
 }}
+
+#[test]
+fn normalization_{name}() {{
+    for zero_prefix in [false, true] {{
+        let mut storage = Matrix::<{size}, 1, Scalar>::zeros();
+        for index in 0..{size} {{ storage[index] = 0.125 * (index + 1) as Scalar; }}
+        if zero_prefix {{
+            for index in 0..{normalized_dim} {{ storage[index] = 0.0; }}
+        }}
+        let mut expected = storage;
+        let squared_norm: Scalar = (0..{normalized_dim})
+            .map(|index| storage[index] * storage[index]).sum();
+        if squared_norm > 0.0 {{
+            let norm = squared_norm.sqrt();
+            for index in 0..{normalized_dim} {{ expected[index] /= norm; }}
+        }}
+        let input = geometry_runtime::{type_name}::from_storage(storage);
+        let returned = normalized_copy_{name}::sym::normalized_copy_{name}(&input);
+        check(&expected, returned.data(), false);
+        let total: Scalar = storage.as_slice().iter().copied().sum();
+        let mut output = input;
+        let mut vector = Matrix::<3, 1, Scalar>::zeros();
+        let cost = normalized_optional_{name}::sym::normalized_optional_{name}(
+            &input, Some(&mut output), Some(&mut vector));
+        assert_eq!(cost, total);
+        check(&expected, output.data(), false);
+        assert_eq!(vector, Matrix::from_rows([[1.0], [0.0], [2.0]]));
+        assert_eq!(normalized_optional_{name}::sym::normalized_optional_{name}(
+            &input, None, None), total);
+        // Translations and camera parameters must not be normalized.
+        for index in {normalized_dim}..{size} {{
+            assert_eq!(output.data()[index], storage[index]);
+        }}
+        assert_eq!(*input.data(), storage);
+    }}
+}}
 """
 
 
@@ -94,11 +133,19 @@ class RustGeometryCodegenTest(unittest.TestCase):
     def test_supported_type_identity_and_backend_boundary(self) -> None:
         stack = RustConfig(algebra=RustAlgebra.STACK_ALGEBRA)
         nalgebra = RustConfig(algebra=RustAlgebra.NALGEBRA)
+        self.assertTrue(stack.normalize_results)
         for geometry_type in GEOMETRY_TYPES:
             with self.subTest(geometry_type=geometry_type):
                 self.assertTrue(stack.supports_geometry_type(geometry_type))
                 self.assertFalse(nalgebra.supports_geometry_type(geometry_type))
-                self.assertFalse(stack.supports_geometry_type(type(geometry_type.__name__, (), {})))
+                unrelated_type = type(geometry_type.__name__, (), {})
+                self.assertFalse(stack.supports_geometry_type(unrelated_type))
+                with self.assertRaises(ValueError):
+                    stack.geometry_normalization_dim(unrelated_type)
+                self.assertEqual(
+                    stack.geometry_normalization_dim(geometry_type),
+                    NORMALIZED_PREFIX_DIMS.get(geometry_type.__name__, 0),
+                )
         self.assertFalse(stack.supports_geometry_type(sf.V3))
         self.assertFalse(stack.supports_geometry_type(float))
 
@@ -110,22 +157,26 @@ class RustGeometryCodegenTest(unittest.TestCase):
                 (Values(direction=direction), direction.to_unit_vector()),
                 (Values(vector=direction.to_unit_vector()), direction),
             ):
-                with self.subTest(inputs=inputs), self.assertRaisesRegex(Exception, "Unsupported type"):
-                    Codegen(
-                        inputs=inputs,
-                        outputs=Values(result=output),
-                        return_key="result",
-                        name="unsupported_geometry",
-                        config=config,
-                    ).generate_function(directory, skip_directory_nesting=True)
+                with self.subTest(inputs=inputs):
+                    with self.assertRaisesRegex(CodeGenerationException, "Unsupported type"):
+                        Codegen(
+                            inputs=inputs,
+                            outputs=Values(result=output),
+                            return_key="result",
+                            name="unsupported_geometry",
+                            config=config,
+                        ).generate_function(directory, skip_directory_nesting=True)
 
     @unittest.skipUnless(shutil.which("cargo") and shutil.which("rustfmt"), "Rust tools missing")
     def test_fresh_geometry_and_imu_execute(self) -> None:
         repo = Path(__file__).resolve().parents[1]
         runtime = repo / "rust" / "symforce"
-        contracts = (Path(__file__).parent / "symforce_rust_geometry_codegen_test_data" / "contracts.rs").read_text()
+        contracts = (
+            Path(__file__).parent / "symforce_rust_geometry_codegen_test_data" / "contracts.rs"
+        ).read_text()
         dependency = next(
-            line for line in (runtime / "Cargo.toml").read_text().splitlines()
+            line
+            for line in (runtime / "Cargo.toml").read_text().splitlines()
             if line.startswith("stack-algebra =")
         )
         with tempfile.TemporaryDirectory(prefix="symforce_rust_geometry_") as directory:
@@ -143,36 +194,42 @@ class RustGeometryCodegenTest(unittest.TestCase):
                         algebra=RustAlgebra.STACK_ALGEBRA,
                         scalar_type=scalar,
                         geometry_crate="geometry-runtime",
+                        normalize_results=False,
                     )
-                    # Use the original generator, including its auto-derivative update.
-                    # No storage wrappers, copied kernels, or generated-source rewriting.
+                    # Match the existing storage-wrapper runtime without altering
+                    # symbolic functions or postprocessing the generated source.
                     generate_manifold_imu_preintegration(config, module)
                     self.assertEqual({path.stem for path in module.glob("*.rs")}, IMU_MODULES)
                     tests = []
                     for geometry_type in GEOMETRY_TYPES:
                         value = geometry_type.symbolic("value")
                         name = geometry_type.__name__.lower()
-                        Codegen(
-                            inputs=Values(value=value),
-                            outputs=Values(result=value),
-                            return_key="result",
-                            name=f"copy_{name}",
-                            config=config,
-                        ).generate_function(module, skip_directory_nesting=True)
-                        # Return a scalar from the middle of mixed outputs to test both
-                        # optional-output positions and typed storage reconstruction.
-                        Codegen(
-                            inputs=Values(value=value),
-                            outputs=Values(
-                                result=value,
-                                total=sum(value.to_storage()),
-                                vector=sf.V3(1, 0, 2),
-                            ),
-                            return_key="total",
-                            name=f"optional_{name}",
-                            config=config,
-                        ).generate_function(module, skip_directory_nesting=True)
-                        tests.append(storage_contract(geometry_type.__name__, geometry_type.storage_dim()))
+                        for prefix, geometry_config in (
+                            ("", config),
+                            ("normalized_", replace(config, normalize_results=True)),
+                        ):
+                            Codegen(
+                                inputs=Values(value=value),
+                                outputs=Values(result=value),
+                                return_key="result",
+                                name=f"{prefix}copy_{name}",
+                                config=geometry_config,
+                            ).generate_function(module, skip_directory_nesting=True)
+                            # A middle scalar return tests both optional-output positions.
+                            Codegen(
+                                inputs=Values(value=value),
+                                outputs=Values(
+                                    result=value,
+                                    total=sum(value.to_storage()),
+                                    vector=sf.V3(1, 0, 2),
+                                ),
+                                return_key="total",
+                                name=f"{prefix}optional_{name}",
+                                config=geometry_config,
+                            ).generate_function(module, skip_directory_nesting=True)
+                        tests.append(
+                            storage_contract(geometry_type.__name__, geometry_type.storage_dim())
+                        )
                     for function in (unit3_retract, unit3_basis):
                         Codegen.function(function, config=config).generate_function(
                             module, skip_directory_nesting=True
@@ -188,16 +245,20 @@ class RustGeometryCodegenTest(unittest.TestCase):
                         + f"const EPSILON: Scalar = {epsilon};\n"
                         + f"const ABSOLUTE: Scalar = {absolute};\n"
                         + f"const RELATIVE: Scalar = {relative};\n"
-                        + "\n".join(tests) + contracts + "\n}\n"
+                        + "\n".join(tests)
+                        + contracts
+                        + "\n}\n"
                     )
                 (src / "lib.rs").write_text("#![no_std]\nmod f32;\nmod f64;\n")
                 manifest = root / "Cargo.toml"
                 manifest.write_text(
                     '[package]\nname = "symforce-rust-geometry-contracts"\n'
                     'version = "0.1.0"\nedition = "2021"\n\n[dependencies]\n'
-                    + dependency + "\n"
+                    + dependency
+                    + "\n"
                     + 'geometry-runtime = { package = "symforce-rust", '
-                    + f'path = "{runtime.as_posix()}", default-features = false, features = ["imu"] }}\n'
+                    + f'path = "{runtime.as_posix()}", '
+                    + 'default-features = false, features = ["imu"] }\n'
                 )
                 commands = [
                     ["cargo", "generate-lockfile", "--manifest-path", str(manifest)],
@@ -205,10 +266,12 @@ class RustGeometryCodegenTest(unittest.TestCase):
                 ]
                 target = os.environ.get("SYMFORCE_RUST_CODEGEN_TARGET")
                 if target:
-                    commands.append([
-                        "cargo", "check", "--locked", "--manifest-path", str(manifest),
-                        "--lib", "--target", target,
-                    ])
+                    commands.append(
+                        [
+                            "cargo", "check", "--locked", "--manifest-path", str(manifest),
+                            "--lib", "--target", target,
+                        ]
+                    )
                 for index, command in enumerate(commands):
                     result = subprocess.run(command, capture_output=True, text=True, check=False)
                     (root / f"cargo-{index}.log").write_text(result.stdout + result.stderr)
@@ -217,7 +280,9 @@ class RustGeometryCodegenTest(unittest.TestCase):
             finally:
                 evidence = os.environ.get("SYMFORCE_RUST_CODEGEN_EVIDENCE")
                 if evidence:
-                    shutil.copytree(root, evidence, dirs_exist_ok=True, ignore=shutil.ignore_patterns("target"))
+                    shutil.copytree(
+                        root, evidence, dirs_exist_ok=True, ignore=shutil.ignore_patterns("target")
+                    )
 
 
 if __name__ == "__main__":

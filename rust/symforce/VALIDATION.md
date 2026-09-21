@@ -50,15 +50,20 @@ runtime comparisons without allowing their prerequisite checks to silently skip.
 ### Typed geometry and fresh IMU generation
 
 `test/symforce_rust_geometry_codegen_test.py` covers all twelve supported geometry/camera types,
-including Unit3, in both scalar precisions. Direct returns and reused optional outputs must preserve
-storage, and the test exercises mixed outputs and a renamed geometry runtime dependency. Unrelated
-classes with matching names and geometry types on the nalgebra backend remain unsupported.
+including Unit3, in both scalar precisions. It checks direct and reused optional outputs in both
+raw-storage and normalized modes, mixed scalar/matrix outputs, and a renamed geometry dependency.
+The inherited `normalize_results=True` default projects only constrained rotation/direction
+components. Pose translations and camera parameters must remain unchanged. Zero-norm constrained
+prefixes are preserved. `normalize_results=False` preserves the symbolic output storage exactly.
+Unrelated classes with matching names and geometry types on nalgebra remain unsupported.
 
 The test calls the original `generate_manifold_imu_preintegration` entry point without symbolic
 storage wrappers or postprocessing. All six functions, including the auto-derivative update, are
 generated and compiled in f32/f64. The newly generated handwritten-derivative update, roll-forward,
 and all three factor functions are numerically compared against the existing C++-qualified Rust
-runtime. Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
+runtime. These comparisons explicitly use `normalize_results=False` to match that runtime's
+raw-storage wrappers; normalization is independently covered by the geometry tests.
+Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
 and every residual/Jacobian/RHS component. The auto-derivative update is compile-qualified only.
 Unit3 tangent bases are additionally checked by finite differences of generated typed retraction,
 including directions at and near the positive-X chart singularity.

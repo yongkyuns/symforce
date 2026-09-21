@@ -92,6 +92,25 @@ class RustConfig(CodegenConfig):
             sf.EquirectangularCameraCal,
         )
 
+    def geometry_normalization_dim(self, value_type: T.Type) -> int:
+        """Leading storage components projected by ``normalize_results``.
+
+        Poses normalize only their rotation, never their translation. Camera
+        calibration storage is unconstrained here, matching the C++ constructors.
+        """
+        if not self.supports_geometry_type(value_type):
+            raise ValueError(f"Unsupported Rust geometry type: {value_type}")
+
+        import symforce.symbolic as sf
+
+        if value_type in (sf.Rot2, sf.Pose2):
+            return 2
+        if value_type in (sf.Rot3, sf.Pose3):
+            return 4
+        if value_type is sf.Unit3:
+            return 3
+        return 0
+
     @classmethod
     def backend_name(cls) -> str:
         return "rust"

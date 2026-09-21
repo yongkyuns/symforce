@@ -10,13 +10,17 @@ and optional outputs for these ``symforce-rust`` storage types:
   ``DoubleSphereCameraCal``, ``SphericalCameraCal``, ``OrthographicCameraCal``,
   and ``EquirectangularCameraCal``.
 
-Geometry outputs use the runtime's ``from_storage`` constructor. Optional
-outputs therefore have types such as ``Option<&mut symforce_rust::Rot3<f64>>``;
-they are not raw storage-vector arguments. The constructor does not implicitly
-normalize the symbolic result. ``Unit3`` has three storage components and two
-tangent coordinates; it is not treated as an unconstrained three-vector when
-forming symbolic Jacobians.
+Geometry outputs use typed storage construction. Optional outputs therefore
+have types such as ``Option<&mut symforce_rust::Rot3<f64>>``; they are not raw
+storage-vector arguments. The inherited ``normalize_results`` option defaults
+to ``True``: rotations and Unit3 directions are normalized before construction.
+For poses, only rotation is normalized; translation and camera calibration
+parameters are unchanged. A zero-norm constrained prefix is left unchanged.
+With ``normalize_results=False``, outputs preserve the symbolic storage exactly.
+The runtime's ``from_storage`` API itself remains unchanged and does not normalize.
 
+``Unit3`` has three storage components and two tangent coordinates; it is not
+treated as an unconstrained three-vector when forming symbolic Jacobians.
 ``RustConfig.geometry_crate`` selects the dependency providing these types.
 The runtime also provides a generic ``CameraCal`` trait and ``PosedCamera``
 wrapper, but these are not additional symbolic function argument/output types.
@@ -34,9 +38,11 @@ without symbolic storage-vector wrappers or source rewriting.
 The required ``symforce_rust_geometry_codegen_test.py`` test generates all six
 IMU functions from that entry point in each precision, compiles the fresh code
 as ``no_std``, and executes update, roll-forward, and factor comparisons against
-the separately C++-qualified runtime. The auto-derivative update is generated
-and compiled; its numerical equivalence is not asserted by this test.
-The same crate tests geometry storage round trips and the Unit3 chart basis.
+the separately C++-qualified runtime. Those comparisons explicitly disable
+output normalization to match the existing raw-storage-wrapper runtime.
+Normalized and raw geometry outputs are independently tested for every type.
+The auto-derivative update is generated and compiled; its numerical equivalence
+is not asserted by this test. The same crate tests the Unit3 chart basis.
 CI additionally cross-compiles it for ``thumbv7em-none-eabihf`` and retains its
 source, lockfile, and compiler/test logs.
 

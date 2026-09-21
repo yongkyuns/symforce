@@ -141,7 +141,7 @@
                 , {% endif -%}
             {% endif -%}
         {%- endif -%}
-    {%- endfor %}
+    {%- endfor -%}
 {% endmacro -%}
 
 {# ------------------------------------------------------------------------- #}
@@ -165,11 +165,22 @@
  #}
 {% macro geometry_output(name, type, terms, spec) -%}
 {% set T = typing_util.get_type(type) %}
+{% set normalize_dim = spec.config.geometry_normalization_dim(T) if spec.config.normalize_results else 0 %}
 {
     let {% if terms %}mut {% endif %}{{ name }} = stack_algebra::Matrix::<{{ T.storage_dim() }}, 1, {{ format_scalar(spec) }}>::zeros();
     {% for lhs, rhs in terms %}
     {{ lhs }} = {{ rhs }};
     {% endfor %}
+    {% if normalize_dim %}
+    // Project only the constrained storage prefix; preserve pose translations.
+    let _{{ name }}_squared_norm = {% for i in range(normalize_dim) %}{{ name }}[{{ i }}] * {{ name }}[{{ i }}]{% if not loop.last %} + {% endif %}{% endfor %};
+    if _{{ name }}_squared_norm > 0.0 {
+        let _{{ name }}_norm = _{{ name }}_squared_norm.sqrt();
+        {% for i in range(normalize_dim) %}
+        {{ name }}[{{ i }}] /= _{{ name }}_norm;
+        {% endfor %}
+    }
+    {% endif %}
     <{{ format_typename(name, type, spec) | trim }}>::from_storage({{ name }})
 }
 {%- endmacro %}
