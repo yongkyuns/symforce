@@ -61,6 +61,39 @@ def unit3_basis(direction: sf.Unit3, epsilon: sf.Scalar) -> sf.Matrix32:
     return direction.storage_D_tangent(epsilon)
 
 
+def method_receivers(x: sf.Scalar) -> sf.Matrix:
+    """Exercise numeric atoms and composite expressions as Rust method receivers."""
+    return sf.Matrix(
+        [
+            sf.Max(0, x),
+            sf.Min(-2, x),
+            sf.Max(sf.Rational(1, 2), x),
+            sf.Min(sf.Float(-0.125), x),
+            sf.sign_no_zero(x + 1),
+            sf.log(x * x + 1),
+        ]
+    )
+
+
+METHOD_RECEIVER_CONTRACT = """
+#[test]
+fn method_receivers_execute() {
+    for x in [-3.0 as Scalar, -2.0, -0.25, 0.0, 0.25, 2.0, 3.0] {
+        let actual = method_receivers::sym::method_receivers(x);
+        let expected = Vector::from_rows([
+            [x.max(0.0)],
+            [x.min(-2.0)],
+            [x.max(0.5)],
+            [x.min(-0.125)],
+            [(x + 1.0).signum()],
+            [(x * x + 1.0).ln()],
+        ]);
+        check("method.receivers", &expected, &actual, false);
+    }
+}
+"""
+
+
 def storage_contract(type_name: str, size: int) -> str:
     name = type_name.lower()
     normalized_dim = NORMALIZED_PREFIX_DIMS.get(type_name, 0)
@@ -108,14 +141,14 @@ fn normalization_{name}() {{
         }}
         let input = geometry_runtime::{type_name}::from_storage(storage);
         let returned = normalized_copy_{name}::sym::normalized_copy_{name}(&input);
-        check(&expected, returned.data(), false);
+        check("geometry.normalized_return", &expected, returned.data(), false);
         let total: Scalar = storage.as_slice().iter().copied().sum();
         let mut output = input;
         let mut vector = Matrix::<3, 1, Scalar>::zeros();
         let cost = normalized_optional_{name}::sym::normalized_optional_{name}(
             &input, Some(&mut output), Some(&mut vector));
         assert_eq!(cost, total);
-        check(&expected, output.data(), false);
+        check("geometry.normalized_optional", &expected, output.data(), false);
         assert_eq!(vector, Matrix::from_rows([[1.0], [0.0], [2.0]]));
         assert_eq!(normalized_optional_{name}::sym::normalized_optional_{name}(
             &input, None, None), total);
@@ -200,7 +233,7 @@ class RustGeometryCodegenTest(unittest.TestCase):
                     # symbolic functions or postprocessing the generated source.
                     generate_manifold_imu_preintegration(config, module)
                     self.assertEqual({path.stem for path in module.glob("*.rs")}, IMU_MODULES)
-                    tests = []
+                    tests = [METHOD_RECEIVER_CONTRACT]
                     for geometry_type in GEOMETRY_TYPES:
                         value = geometry_type.symbolic("value")
                         name = geometry_type.__name__.lower()
@@ -230,7 +263,7 @@ class RustGeometryCodegenTest(unittest.TestCase):
                         tests.append(
                             storage_contract(geometry_type.__name__, geometry_type.storage_dim())
                         )
-                    for function in (unit3_retract, unit3_basis):
+                    for function in (unit3_retract, unit3_basis, method_receivers):
                         Codegen.function(function, config=config).generate_function(
                             module, skip_directory_nesting=True
                         )
