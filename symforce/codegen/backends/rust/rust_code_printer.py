@@ -67,17 +67,28 @@ class RustCodePrinter(SympyRustCodePrinter):
         # add it here instead so we can just call `doprint` and get the correct behavior.
         # See https://github.com/sympy/sympy/pull/26882
         def doprint(self, expr: T.Any, assign_to: T.Any = None) -> str:
-            # SymPy's Rust printer rewrites Mod into a floor expression before dispatching to
-            # _print_Mod. Preserve Mod so floating-point wrap_angle uses rem_euclid instead.
-            if not isinstance(expr, sympy.Expr):
-                return super().doprint(expr, assign_to)
-            if not expr.has(sympy.Mod):
-                expr = self._rewrite_known_functions(expr)  # type: ignore[attr-defined]
+            if isinstance(expr, sympy.Expr):
+                if expr.has(sympy.Mod):
+                    # SymPy's Rust printer rewrites Mod into a floor expression before
+                    # dispatching to _print_Mod. Suppress only that rewrite; expressions
+                    # containing Mod must still receive rewrites such as sec -> cos and
+                    # Max/Min -> Piecewise.
+                    rewriteable_functions = self._rewriteable_functions  # type: ignore[attr-defined]
+                    try:
+                        self._rewriteable_functions = {  # type: ignore[attr-defined]
+                            name: rewrite
+                            for name, rewrite in rewriteable_functions.items()
+                            if name != "Mod"
+                        }
+                        expr = self._rewrite_known_functions(expr)  # type: ignore[attr-defined]
+                    finally:
+                        self._rewriteable_functions = rewriteable_functions  # type: ignore[attr-defined]
+                else:
+                    expr = self._rewrite_known_functions(expr)  # type: ignore[attr-defined]
                 if isinstance(expr, sympy.Expr):
                     for src_func, dst_func in self.function_overrides.values():  # type: ignore[attr-defined]
                         expr = expr.replace(src_func, dst_func)
-                return super().doprint(expr, assign_to)
-            return self._print(expr)
+            return super().doprint(expr, assign_to)
 
     def _print_Zero(self, expr: sympy.Expr, _type: T.Any = None) -> str:
         if self.scalar_type == ScalarType.GENERIC.value:

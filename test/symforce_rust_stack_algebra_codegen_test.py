@@ -197,6 +197,20 @@ mod tests {
         )
         self.assertIn("rem_euclid", generated)
 
+    def test_mod_preserves_other_sympy_function_rewrites(self) -> None:
+        x = sf.Symbol("x")
+        generated = (
+            RustConfig(
+                scalar_type=ScalarType.DOUBLE,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            )
+            .printer()
+            .doprint(sf.Mod(x, 2 * sf.pi) + sf.sec(x))
+        )
+        self.assertIn("rem_euclid", generated)
+        self.assertIn("cos", generated)
+        self.assertNotIn("sec", generated)
+
     def test_pow_parenthesizes_composite_base(self) -> None:
         x, y = sf.Symbol("x"), sf.Symbol("y")
         generated = (
