@@ -34,7 +34,8 @@ using Var = bundle_adjustment::Var;
 using FixedVar = bundle_adjustment_fixed_size::Var;
 
 // Both example graphs address the same fixture schema. Fail compilation on key drift.
-#define SAME_KEY(name) static_assert(static_cast<char>(Var::name) == static_cast<char>(FixedVar::name))
+#define SAME_KEY(name) \
+  static_assert(static_cast<char>(Var::name) == static_cast<char>(FixedVar::name))
 SAME_KEY(VIEW);
 SAME_KEY(CALIBRATION);
 SAME_KEY(POSE_PRIOR_T);
@@ -122,12 +123,13 @@ int main(int argc, char** argv) {
     }
     bundle_adjustment::BundleAdjustmentProblemParams params;
     auto values = ReadFixture(params);
-    const auto factors = std::string(argv[1]) == "fixed"
-                             ? std::vector<sym::Factord>{bundle_adjustment_fixed_size::BuildFactor()}
-                             : bundle_adjustment::BuildFactors(params);
+    const auto factors =
+        std::string(argv[1]) == "fixed"
+            ? std::vector<sym::Factord>{bundle_adjustment_fixed_size::BuildFactor()}
+            : bundle_adjustment::BuildFactors(params);
     const auto keys = bundle_adjustment::ComputeKeysToOptimizeWithoutView0(factors);
-    sym::Optimizerd optimizer(sym::example_utils::OptimizerParams(), factors,
-                              "RustParityReference", keys, params.epsilon);
+    sym::Optimizerd optimizer(sym::example_utils::OptimizerParams(), factors, "RustParityReference",
+                              keys, params.epsilon);
     const auto stats = optimizer.Optimize(values);
     const auto& best = stats.iterations.at(stats.best_index);
     if (stats.status != sym::optimization_status_t::SUCCESS || !std::isfinite(best.new_error)) {
@@ -139,7 +141,9 @@ int main(int argc, char** argv) {
     const auto pose = values.At<sym::Pose3d>({Var::VIEW, 1});
     std::cout << "pose 1: (";
     for (int index = 0; index < 7; ++index) {
-      if (index != 0) std::cout << ", ";
+      if (index != 0) {
+        std::cout << ", ";
+      }
       std::cout << pose.Data()[index];
     }
     std::cout << ")\n";
