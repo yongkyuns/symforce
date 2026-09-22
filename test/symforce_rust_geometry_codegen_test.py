@@ -51,6 +51,11 @@ IMU_MODULES = {
     "internal_imu_unit_gravity_factor",
     "roll_forward_state",
 }
+# The same epsilon and numerical budgets apply to concrete and generic emission.
+SCALAR_CONTRACTS = {
+    "f32": ("1e-6", "0.0", "2e-4"),
+    "f64": ("1e-9", "1e-11", "2e-10"),
+}
 
 
 def unit3_retract(direction: sf.Unit3, delta: sf.V2, epsilon: sf.Scalar) -> sf.Unit3:
@@ -219,11 +224,12 @@ class RustGeometryCodegenTest(unittest.TestCase):
             try:
                 src = root / "src"
                 src.mkdir()
-                for scalar, scalar_name, epsilon, absolute, relative in (
-                    (ScalarType.FLOAT, "f32", "1e-6", "0.0", "2e-4"),
-                    (ScalarType.DOUBLE, "f64", "1e-9", "1e-11", "2e-10"),
+                for scalar, module_name, test_scalars in (
+                    (ScalarType.FLOAT, "f32", ("f32",)),
+                    (ScalarType.DOUBLE, "f64", ("f64",)),
+                    (ScalarType.GENERIC, "generic", ("f32", "f64")),
                 ):
-                    module = src / scalar_name
+                    module = src / module_name
                     module.mkdir()
                     config = RustConfig(
                         algebra=RustAlgebra.STACK_ALGEBRA,
@@ -269,48 +275,26 @@ class RustGeometryCodegenTest(unittest.TestCase):
                         Codegen.function(function, config=config).generate_function(
                             module, skip_directory_nesting=True
                         )
-                    declarations = "\n".join(
+                    source = "\n".join(
                         f"mod {path.stem};" for path in sorted(module.glob("*.rs"))
                     )
-                    (module / "mod.rs").write_text(
-                        declarations
-                        + "\n#[cfg(test)] mod contracts {\nuse super::*;\n"
-                        + "use stack_algebra::{Float, Matrix, Vector};\n"
-                        + f"type Scalar = {scalar_name};\n"
-                        + f"const EPSILON: Scalar = {epsilon};\n"
-                        + f"const ABSOLUTE: Scalar = {absolute};\n"
-                        + f"const RELATIVE: Scalar = {relative};\n"
-                        + "\n".join(tests)
-                        + contracts
-                        + "\n}\n"
-                    )
-                generic_module = src / "generic"
-                generic_module.mkdir()
-                generic_config = RustConfig(
-                    algebra=RustAlgebra.STACK_ALGEBRA,
-                    scalar_type=ScalarType.GENERIC,
-                    geometry_crate="geometry-runtime",
-                    normalize_results=False,
-                )
-                generate_manifold_imu_preintegration(generic_config, generic_module)
-                self.assertEqual(
-                    {path.stem for path in generic_module.glob("*.rs")}, IMU_MODULES
-                )
-                generic_rotation = sf.Rot3.symbolic("generic_rotation")
-                Codegen(
-                    inputs=Values(value=generic_rotation),
-                    outputs=Values(result=generic_rotation),
-                    return_key="result",
-                    name="generic_normalized_rot3",
-                    config=replace(generic_config, normalize_results=True),
-                ).generate_function(generic_module, skip_directory_nesting=True)
-                (generic_module / "mod.rs").write_text(
-                    "\n".join(f"mod {path.stem};" for path in sorted(generic_module.glob("*.rs")))
-                    + "\n"
-                )
-                (src / "lib.rs").write_text(
-                    "#![no_std]\nmod f32;\nmod f64;\nmod generic;\n"
-                )
+                    # One generated generic module is instantiated at both scalar types.
+                    # Reuse the exact concrete contracts instead of a weaker compile-only gate.
+                    for scalar_name in test_scalars:
+                        epsilon, absolute, relative = SCALAR_CONTRACTS[scalar_name]
+                        source += (
+                            f"\n#[cfg(test)] mod contracts_{scalar_name} {{\nuse super::*;\n"
+                            + "use stack_algebra::{Float, Matrix, Vector};\n"
+                            + f"type Scalar = {scalar_name};\n"
+                            + f"const EPSILON: Scalar = {epsilon};\n"
+                            + f"const ABSOLUTE: Scalar = {absolute};\n"
+                            + f"const RELATIVE: Scalar = {relative};\n"
+                            + "\n".join(tests)
+                            + contracts
+                            + "\n}\n"
+                        )
+                    (module / "mod.rs").write_text(source)
+                (src / "lib.rs").write_text("#![no_std]\nmod f32;\nmod f64;\nmod generic;\n")
                 manifest = root / "Cargo.toml"
                 manifest.write_text(
                     '[package]\nname = "symforce-rust-geometry-contracts"\n'
