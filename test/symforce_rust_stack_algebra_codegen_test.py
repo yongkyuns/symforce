@@ -51,6 +51,9 @@ class SymforceRustStackAlgebraCodegenTest(TestCase):
                     sf.sqrt(x * x + 1),
                     sf.sign_no_zero(x + y),
                     sf.Mod(x, sf.Rational(5, 2)),
+                    # Regression: add-then-mod implementations lose x here because
+                    # x + 1e16 can round to exactly 1e16.
+                    sf.Mod(x, sf.Float(1e16)),
                     sf.Max(x + y, 0),
                     sf.log(x * x + 1),
                 ]
@@ -93,10 +96,11 @@ mod tests {
             (x * x + 1.0).sqrt(),
             (x + y).signum(),
             x.rem_euclid(2.5),
+            x.rem_euclid(1.0e16),
             (x + y).max(0.0),
             (x * x + 1.0).ln(),
         ];
-        for index in 0..6 {
+        for index in 0..7 {
             assert!((actual[index] - expected[index]).abs() < 1e-5);
         }
     }
@@ -108,17 +112,18 @@ mod tests {
             (x * x + 1.0).sqrt(),
             (x + y).signum(),
             x.rem_euclid(2.5),
+            x.rem_euclid(1.0e16),
             (x + y).max(0.0),
             (x * x + 1.0).ln(),
         ];
-        for index in 0..6 {
+        for index in 0..7 {
             assert!((actual[index] - expected[index]).abs() < 1e-12);
         }
     }
 
     #[test]
     fn generic_math_executes_in_both_precisions() {
-        for (x, y) in [(-3.0, 0.5), (-0.25, 1.0), (2.0, -4.0)] {
+        for (x, y) in [(-3.0, 0.5), (-0.25, 1.0), (1.0, 0.0), (2.0, -4.0)] {
             check_f32(x as f32, y as f32);
             check_f64(x, y);
         }
