@@ -24,6 +24,7 @@ from symforce.codegen.backends.rust import RustConfig
 from symforce.codegen.backends.rust import ScalarType
 from symforce.codegen.codegen import CodeGenerationException
 from symforce.slam.imu_preintegration.generate import generate_manifold_imu_preintegration
+from symforce.test_util import TestCase
 from symforce.values import Values
 
 # Independently enumerate the public contract rather than deriving test cases from
@@ -167,7 +168,7 @@ fn normalization_{name}() {{
 """
 
 
-class RustGeometryCodegenTest(unittest.TestCase):
+class RustGeometryCodegenTest(TestCase):
     def test_supported_type_identity_and_backend_boundary(self) -> None:
         stack = RustConfig(algebra=RustAlgebra.STACK_ALGEBRA)
         nalgebra = RustConfig(algebra=RustAlgebra.NALGEBRA)
@@ -331,4 +332,4 @@ class RustGeometryCodegenTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    RustGeometryCodegenTest.main()
