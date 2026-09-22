@@ -41,9 +41,13 @@ as ``no_std``, and executes update, roll-forward, and factor comparisons against
 the separately C++-qualified runtime. Those comparisons explicitly disable
 output normalization to match the existing raw-storage-wrapper runtime.
 Normalized and raw geometry outputs are independently tested for every type.
-The auto-derivative update is generated and executed for the same deterministic
-integration samples as the handwritten-derivative update; every measurement-storage
-component and the defined lower covariance triangle are compared in both precisions.
+The auto-derivative update is executed against an independent derivative of the
+regularized quaternion update, including state covariance and all bias derivatives.
+Its mean update is also compared with the handwritten variant. The seven
+trajectories include zero and near-zero corrected angular rates in both precisions.
+The handwritten right-Jacobian and autodiff use different finite-epsilon
+regularizations; their derivative outputs are not assumed identical at the
+unchanged f64 tolerance. A negative control preserves the original discrepancy.
 The same crate tests the Unit3 chart basis.
 CI uses the repository's vendored SymEngine for this full-generation test while
 retaining SymPy for the original codegen/camera modules. It cross-compiles the

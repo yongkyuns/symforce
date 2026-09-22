@@ -24,7 +24,7 @@ fn check<const R: usize, const C: usize>(
                 let b = actual[(row, col)];
                 let budget = absolute + RELATIVE * a.abs();
                 assert!(b.is_finite() && (a - b).abs() <= budget,
-                    "{label} ({row},{col}): runtime={a}, generated={b}, budget={budget}");
+                    "{label} ({row},{col}): reference={a}, generated={b}, budget={budget}");
             }
         }
     }
@@ -58,13 +58,153 @@ fn unit3_chart_derivative_matches_generated_retraction() {
     }
 }
 
+// Independent test-only derivative of the epsilon-regularized quaternion update.
+// Do not use _right_jacobian here: it regularizes ||phi||^2 with sqrt(epsilon),
+// whereas Rot3::from_tangent uses epsilon^2. These are different finite-epsilon maps.
+fn reference_product<const R: usize, const K: usize, const C: usize>(
+    a: &Matrix<R, K, Scalar>, b: &Matrix<K, C, Scalar>,
+) -> Matrix<R, C, Scalar> {
+    let mut result = Matrix::zeros();
+    for row in 0..R {
+        for col in 0..C {
+            for inner in 0..K { result[(row, col)] += a[(row, inner)] * b[(inner, col)]; }
+        }
+    }
+    result
+}
+
+fn reference_transpose<const R: usize, const C: usize>(
+    a: &Matrix<R, C, Scalar>,
+) -> Matrix<C, R, Scalar> {
+    let mut result = Matrix::zeros();
+    for row in 0..R {
+        for col in 0..C { result[(col, row)] = a[(row, col)]; }
+    }
+    result
+}
+
+fn reference_skew(v: &Vector<3, Scalar>) -> Matrix<3, 3, Scalar> {
+    Matrix::from_rows([[0.0, -v[2], v[1]], [v[2], 0.0, -v[0]], [-v[1], v[0], 0.0]])
+}
+
+// q * p = L(q) p; p * q = R(q) p. Storage is [x, y, z, w].
+fn reference_quaternion_matrix(q: &Vector<4, Scalar>, left: bool) -> Matrix<4, 4, Scalar> {
+    let v = Vector::from_rows([[q[0]], [q[1]], [q[2]]]);
+    let skew = reference_skew(&v);
+    let mut result = Matrix::zeros();
+    for row in 0..3 {
+        for col in 0..3 {
+            result[(row, col)] = if left { skew[(row, col)] } else { -skew[(row, col)] };
+        }
+        result[(row, row)] += q[3];
+        result[(row, 3)] = q[row];
+        result[(3, row)] = -q[row];
+    }
+    result[(3, 3)] = q[3];
+    result
+}
+
+fn reference_storage_jacobian(q: &Vector<4, Scalar>) -> Matrix<4, 3, Scalar> {
+    let left = reference_quaternion_matrix(q, true);
+    let mut result = Matrix::zeros();
+    for row in 0..4 {
+        for col in 0..3 { result[(row, col)] = 0.5 * left[(row, col)]; }
+    }
+    result
+}
+
+fn regularized_auto_jacobians(
+    q: &Vector<4, Scalar>, accel: &Vector<3, Scalar>, gyro: &Vector<3, Scalar>,
+    dt: Scalar, epsilon: Scalar,
+) -> (Matrix<9, 9, Scalar>, Matrix<9, 3, Scalar>, Matrix<9, 3, Scalar>) {
+    let mut phi = Vector::<3, Scalar>::zeros();
+    let mut theta_squared = epsilon * epsilon;
+    for row in 0..3 {
+        phi[row] = gyro[row] * dt;
+        theta_squared += phi[row] * phi[row];
+    }
+    let theta = theta_squared.sqrt();
+    assert!(theta > 0.0);
+    let sine = (theta / 2.0).sin();
+    let cosine = (theta / 2.0).cos();
+    let sinc_half = sine / theta;
+    // d(sin(theta/2)/theta)/dphi = radial * phi. The series avoids
+    // cancellation at zero rate; its first omitted term is -theta^8/8174960640.
+    let radial = if theta < 0.1 {
+        -1.0 / 24.0 + theta_squared * (1.0 / 960.0
+            + theta_squared * (-1.0 / 107520.0 + theta_squared / 23224320.0))
+    } else {
+        (0.5 * theta * cosine - sine) / (theta * theta * theta)
+    };
+    let update = Vector::from_rows([
+        [sinc_half * phi[0]], [sinc_half * phi[1]], [sinc_half * phi[2]], [cosine],
+    ]);
+    let left = reference_quaternion_matrix(q, true);
+    let new_q = reference_product(&left, &update);
+    let storage_jacobian = reference_storage_jacobian(q);
+    let mut tangent_projection = reference_transpose(&reference_storage_jacobian(&new_q));
+    for row in 0..3 {
+        for col in 0..4 { tangent_projection[(row, col)] *= 4.0; }
+    }
+    let mut update_derivative = Matrix::<4, 3, Scalar>::zeros();
+    for row in 0..3 {
+        for col in 0..3 { update_derivative[(row, col)] = radial * phi[row] * phi[col]; }
+        update_derivative[(row, row)] += sinc_half;
+        update_derivative[(3, row)] = -0.5 * sinc_half * phi[row];
+    }
+    let rotation_state = reference_product(&tangent_projection,
+        &reference_product(&reference_quaternion_matrix(&update, false), &storage_jacobian));
+    let rotation_gyro = reference_product(&tangent_projection,
+        &reference_product(&left, &update_derivative));
+
+    // Differentiate R(q) a = a + 2 w (v x a) + 2 v x (v x a)
+    // in raw quaternion storage, then project onto the input tangent space.
+    // Do not silently normalize q: generated raw-storage outputs do not do so.
+    let v = Vector::from_rows([[q[0]], [q[1]], [q[2]]]);
+    let skew_v = reference_skew(&v);
+    let skew_accel = reference_skew(accel);
+    let skew_squared = reference_product(&skew_v, &skew_v);
+    let cross = reference_product(&skew_v, accel);
+    let mut dot: Scalar = 0.0;
+    for row in 0..3 { dot += v[row] * accel[row]; }
+    let mut rotated_accel_derivative = Matrix::<3, 4, Scalar>::zeros();
+    let mut rotation = Matrix::<3, 3, Scalar>::zeros();
+    for row in 0..3 {
+        for col in 0..3 {
+            rotated_accel_derivative[(row, col)] = 2.0 * (-q[3] * skew_accel[(row, col)]
+                + v[row] * accel[col] - 2.0 * accel[row] * v[col]);
+            rotation[(row, col)] = 2.0 * (q[3] * skew_v[(row, col)] + skew_squared[(row, col)]);
+        }
+        rotated_accel_derivative[(row, row)] += 2.0 * dot;
+        rotated_accel_derivative[(row, 3)] = 2.0 * cross[row];
+        rotation[(row, row)] += 1.0;
+    }
+    let accel_rotation = reference_product(&rotated_accel_derivative, &storage_jacobian);
+    let mut state = Matrix::<9, 9, Scalar>::zeros();
+    let mut gyro_noise = Matrix::<9, 3, Scalar>::zeros();
+    let mut accel_noise = Matrix::<9, 3, Scalar>::zeros();
+    for row in 0..9 { state[(row, row)] = 1.0; }
+    for row in 0..3 {
+        state[(row + 6, row + 3)] = dt;
+        for col in 0..3 {
+            state[(row, col)] = rotation_state[(row, col)];
+            state[(row + 3, col)] = accel_rotation[(row, col)] * dt;
+            state[(row + 6, col)] = accel_rotation[(row, col)] * dt * dt / 2.0;
+            gyro_noise[(row, col)] = rotation_gyro[(row, col)] * dt;
+            accel_noise[(row + 3, col)] = rotation[(row, col)] * dt;
+            accel_noise[(row + 6, col)] = rotation[(row, col)] * dt * dt / 2.0;
+        }
+    }
+    (state, gyro_noise, accel_noise)
+}
+
 #[test]
 fn regenerated_imu_matches_the_qualified_runtime() {
     use geometry_runtime::{
         ImuFactorT, ImuPreintegratorT, ImuWithGravityDirectionFactorT,
         ImuWithGravityFactorT, Pose3, Rot3, Unit3,
     };
-    for case in 0..4 {
+    for case in 0..7 {
         let offset = case as Scalar;
         let accel_bias = Vector::from_rows([[0.1 + 0.03 * offset], [-0.2], [0.05]]);
         let gyro_bias = Vector::from_rows([[0.01], [-0.02 + 0.005 * offset], [0.03]]);
@@ -72,7 +212,12 @@ fn regenerated_imu_matches_the_qualified_runtime() {
         for sample in 0..8 + case {
             let t = sample as Scalar;
             let accel = Vector::from_rows([[0.2 + 0.03 * t], [-0.4 + 0.02 * offset], [9.7]]);
-            let gyro = Vector::from_rows([[0.2], [-0.4 + 0.01 * t], [0.1 + 0.05 * offset]]);
+            let mut gyro = Vector::from_rows([[0.2], [-0.4 + 0.01 * t], [0.1 + 0.05 * offset]]);
+            // Keep the original four trajectories and add zero/near-zero rates.
+            if case >= 4 {
+                let rate = [0.0, 1e-10, 1e-5][case - 4];
+                gyro = gyro_bias + Vector::from_rows([[rate], [-2.0 * rate], [3.0 * rate]]);
+            }
             let accel_cov = Vector::from_rows([[0.002], [0.003], [0.004]]);
             let gyro_cov = Vector::from_rows([[0.0003], [0.0005], [0.0009]]);
             let dt = 0.005 + 0.001 * t;
@@ -105,18 +250,67 @@ fn regenerated_imu_matches_the_qualified_runtime() {
                     Some(&mut automatic.dp_d_gyro_bias),
                 );
             automatic.delta.dt += dt;
-            check(
-                "auto_update.measurement",
-                &fresh.to_storage(),
-                &automatic.to_storage(),
-                false,
-            );
-            check(
-                "auto_update.covariance",
-                &covariance,
-                &automatic_covariance,
-                true,
-            );
+            // The mean update is shared; the finite-epsilon derivatives are not.
+            check("auto_update.rotation", fresh.delta.dr.data(), automatic.delta.dr.data(), false);
+            check("auto_update.velocity", &fresh.delta.dv, &automatic.delta.dv, false);
+            check("auto_update.position", &fresh.delta.dp, &automatic.delta.dp, false);
+            let (state_jacobian, gyro_jacobian, accel_jacobian) = regularized_auto_jacobians(
+                old.delta.dr.data(), &(accel - old.accel_bias), &(gyro - old.gyro_bias), dt, EPSILON);
+            let mut prior_covariance = Matrix::<9, 9, Scalar>::zeros();
+            let mut prior_gyro_bias = Matrix::<9, 3, Scalar>::zeros();
+            let mut prior_accel_bias = Matrix::<9, 3, Scalar>::zeros();
+            for row in 0..9 {
+                for col in 0..9 {
+                    prior_covariance[(row, col)] = runtime.covariance()[(row.max(col), row.min(col))];
+                }
+            }
+            for row in 0..3 {
+                for col in 0..3 {
+                    prior_gyro_bias[(row, col)] = old.dr_d_gyro_bias[(row, col)];
+                    prior_gyro_bias[(row + 3, col)] = old.dv_d_gyro_bias[(row, col)];
+                    prior_gyro_bias[(row + 6, col)] = old.dp_d_gyro_bias[(row, col)];
+                    prior_accel_bias[(row + 3, col)] = old.dv_d_accel_bias[(row, col)];
+                    prior_accel_bias[(row + 6, col)] = old.dp_d_accel_bias[(row, col)];
+                }
+            }
+            let mut expected_covariance = reference_product(
+                &reference_product(&state_jacobian, &prior_covariance),
+                &reference_transpose(&state_jacobian));
+            for row in 0..9 {
+                for col in 0..=row {
+                    for axis in 0..3 {
+                        expected_covariance[(row, col)] +=
+                            gyro_jacobian[(row, axis)] * gyro_cov[axis] * gyro_jacobian[(col, axis)] / dt
+                            + accel_jacobian[(row, axis)] * accel_cov[axis] * accel_jacobian[(col, axis)] / dt;
+                    }
+                }
+            }
+            let expected_gyro_bias = reference_product(&state_jacobian, &prior_gyro_bias);
+            let expected_accel_bias = reference_product(&state_jacobian, &prior_accel_bias);
+            let mut expected = fresh;
+            for row in 0..3 {
+                for col in 0..3 {
+                    expected.dr_d_gyro_bias[(row, col)] =
+                        expected_gyro_bias[(row, col)] - gyro_jacobian[(row, col)];
+                    expected.dv_d_gyro_bias[(row, col)] =
+                        expected_gyro_bias[(row + 3, col)] - gyro_jacobian[(row + 3, col)];
+                    expected.dp_d_gyro_bias[(row, col)] =
+                        expected_gyro_bias[(row + 6, col)] - gyro_jacobian[(row + 6, col)];
+                    expected.dv_d_accel_bias[(row, col)] =
+                        expected_accel_bias[(row + 3, col)] - accel_jacobian[(row + 3, col)];
+                    expected.dp_d_accel_bias[(row, col)] =
+                        expected_accel_bias[(row + 6, col)] - accel_jacobian[(row + 6, col)];
+                }
+            }
+            check("auto_update.measurement", &expected.to_storage(), &automatic.to_storage(), false);
+            check("auto_update.covariance", &expected_covariance, &automatic_covariance, true);
+            // A negative control for the original failure: in f64 the handwritten
+            // derivative is outside this same unchanged budget, not a valid oracle.
+            if RELATIVE < 1e-5 && case == 0 && sample == 0 {
+                let a = expected.dr_d_gyro_bias[(2, 0)];
+                let b = fresh.dr_d_gyro_bias[(2, 0)];
+                assert!((a - b).abs() > ABSOLUTE + RELATIVE * a.abs());
+            }
             runtime.integrate_measurement(&accel, &gyro, &accel_cov, &gyro_cov, dt, EPSILON);
             check(
                 "update.measurement",
