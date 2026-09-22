@@ -231,8 +231,13 @@ mod tests {
             algebra=RustAlgebra.STACK_ALGEBRA,
         ).printer()
         self.assertEqual(printer.doprint(sf.log(x + y)), "(x + y).ln()")
-        self.assertEqual(printer.doprint(sf.Max(x + y, x - y)), "(x + y).max(x - y)")
-        self.assertEqual(printer.doprint(sf.Min(x + y, x - y)), "(x + y).min(x - y)")
+
+        # Public doprint lowers Max/Min through SymPy's rewrite pass before backend dispatch.
+        # Exercise the backend hooks directly to qualify method-receiver grouping itself.
+        max_expr = sf.Max(x + y, x - y)
+        min_expr = sf.Min(x + y, x - y)
+        self.assertEqual(printer._print_Max(max_expr), "(x + y).max(x - y)")  # noqa: SLF001
+        self.assertEqual(printer._print_Min(min_expr), "(x + y).min(x - y)")  # noqa: SLF001
 
     def test_atan_camera_expression_matches_cpp(self) -> None:
         def project(point: sf.V3, calibration: sf.ATANCameraCal, epsilon: sf.Scalar) -> sf.V2:

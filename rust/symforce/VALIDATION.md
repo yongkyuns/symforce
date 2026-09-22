@@ -62,12 +62,31 @@ Unrelated classes with matching names and geometry types on nalgebra remain unsu
 
 The test calls the original `generate_manifold_imu_preintegration` entry point without symbolic
 storage wrappers or postprocessing. All six functions, including the auto-derivative update, are
-generated and compiled in f32/f64. The newly generated handwritten-derivative update, roll-forward,
-and all three factor functions are numerically compared against the existing C++-qualified Rust
-runtime. These comparisons explicitly use `normalize_results=False` to match that runtime's
-raw-storage wrappers; normalization is independently covered by the geometry tests.
-Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
-and every residual/Jacobian/RHS component. The auto-derivative update is compile-qualified only.
+generated in concrete f32, concrete f64, and generic scalar mode. The newly generated
+handwritten-derivative update, roll-forward, and all three factor functions are numerically compared
+against the existing C++-qualified Rust runtime. These comparisons explicitly use
+`normalize_results=False` to match that runtime's raw-storage wrappers; normalization is
+independently covered by the geometry tests. Comparisons cover measurement storage, the defined
+lower covariance and Hessian triangles, and every residual/Jacobian/RHS component.
+
+The auto-derivative update is executed against an independent test-only derivative of the
+regularized quaternion update. The reference differentiates quaternion composition and rotated
+acceleration in raw storage, projects through the input/output tangent maps, and propagates the
+full state covariance and all five bias-derivative blocks. It uses the exact same prior state and
+inputs as the generated function. The shared mean update is also compared directly with the
+handwritten variant. Seven trajectories supply 77 one-step updates per precision, including the
+original four trajectories and additional zero/near-zero corrected angular rates.
+
+Direct equality of the two derivative variants at the existing f64 budget is not a valid contract:
+`_right_jacobian` uses `sqrt(dot(phi, phi) + sqrt(epsilon))`, while `Rot3.from_tangent` uses
+`sqrt(dot(phi, phi) + epsilon**2)`. At the first original sample, `epsilon=1e-9`, `dt=0.005`, and
+`phi=(0.00095, -0.0019, 0.00035)`, their gyro-bias derivative entry (2, 0) is approximately
+`4.7497085651500935e-6` versus `4.749721082043641e-6`. An independent high-precision evaluation
+reproduces the approximately `1.25168939e-11` difference. The contract includes a negative control
+showing that the handwritten value is outside the unchanged f64 budget. It does not change either
+production algorithm, normalize the inputs, replace generated source, or widen any tolerance.
+The stable small-angle series belongs only to the independent test reference.
+
 Unit3 tangent bases are additionally checked by finite differences of generated typed retraction,
 including directions at and near the positive-X chart singularity.
 
@@ -80,14 +99,24 @@ export SYMFORCE_RUST_CODEGEN_EVIDENCE="$PWD/build/rust-validation/geometry-codeg
 python tools/run_required_test.py test/symforce_rust_geometry_codegen_test.py
 ```
 
-The generated crate itself is `no_std`; CI executes its host tests and cross-compiles its library
-for the requested target. It also emits the six standard IMU functions once with a generic
-`T: Float + MatrixScalar + ReductionScalar` signature and requires that generic module to compile
-on both targets. Generic scalar mode is restricted to stack-algebra. An independent small generated
-function executes under both f32 and f64 so generic literal and method-printing paths are not merely
-compile-checked. The evidence directory contains generated source, its Cargo.lock, and
-compiler/test output, not build products. This is fresh concrete-scalar generation, not yet
-byte-for-byte regeneration of the checked-in scalar-generic runtime kernels.
+### Shared concrete and generic scalar qualification
+
+The generated crate is `no_std`. The generic module is emitted once with
+`T: Float + MatrixScalar + ReductionScalar` signatures and instantiated at both f32 and f64 in
+host tests. All four combinations (concrete f32, concrete f64, generic f32, generic f64) run the same
+27 tests: 24 geometry storage/normalization tests, method receivers, the Unit3 chart derivative, and
+the complete IMU contract. The expected suite contains 108 tests. The generic IMU contract executes
+all six functions, including 77 updates per precision against the same autodiff reference, rather
+than just checking that generic function definitions compile. Epsilon, absolute budgets, and
+relative budgets are shared by emission mode; generic code receives no weaker numerical contract.
+Generic scalar mode is restricted to stack-algebra.
+
+CI also checks the generated library for `thumbv7em-none-eabihf`. That check does not execute the
+host test suite on the target or prove physical-MCU behavior. A separate small generated function
+executes at f32 and f64 to cover generic arithmetic emission. The evidence directory contains
+generated source, Cargo.lock, and compiler/test output, not build products. This is fresh concrete
+and generic function generation, not byte-for-byte regeneration or replacement of the checked-in
+scalar-generic runtime kernels.
 
 ## Complete IMU comparisons
 
@@ -102,9 +131,8 @@ for the fixed-gravity, variable-gravity, and gravity-direction factor parameteri
 is evaluated both with covariance-derived square-root information and with a deterministic,
 non-diagonal lower-triangular square-root-information matrix. This broader branch is deliberately
 shared with the fresh-generation contract so it can distinguish generator errors from stale runtime
-kernels. Hessians
-are symmetrized from their defined lower triangle on both sides; unspecified upper-triangle memory
-is not treated as a numerical output.
+kernels. Hessians are symmetrized from their defined lower triangle on both sides; unspecified
+upper-triangle memory is not treated as a numerical output.
 
 The f64 budget remains `1e-11 + 2e-10 * abs(reference_component)`. The f32 budget is
 `1e-6 * max(field_max_abs, 1e-30) + 2e-4 * abs(reference_component)`, allowing norm-scaled floating-point
@@ -130,6 +158,7 @@ guarantee.
 
 This baseline does not redesign optimization APIs, generalize the dataset-specific BAL fast path,
 implement sparse generated outputs, or establish replacement/regeneration of the checked-in generic
-IMU runtime kernels. Generic generation is compile-qualified separately before any runtime switch. The current executable example parity helper checks selected optimization results, not
-every solver trajectory or failure mode. Those are separate follow-up workstreams; do not interpret
-the new CI as proving them.
+IMU runtime kernels. Generic generation is qualified separately before any runtime switch.
+The current executable example parity helper checks selected optimization results, not every solver
+trajectory or failure mode. Those are separate follow-up workstreams; do not interpret the new CI
+as proving them.
