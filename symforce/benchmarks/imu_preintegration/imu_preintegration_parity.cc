@@ -112,22 +112,20 @@ void Run(const char* scalar, Scalar epsilon) {
     pose_j.Data()[5] -= Scalar(0.03);
     pose_j.Data()[6] += Scalar(0.01);
     const Vector3 vel_j = prediction.second + Vector3{Scalar(0.1), Scalar(-0.05), Scalar(0.02)};
-    const Vector3 eval_accel_bias =
-        accel_bias + Vector3{Scalar(0.01), Scalar(-0.02), Scalar(0.03)};
+    const Vector3 eval_accel_bias = accel_bias + Vector3{Scalar(0.01), Scalar(-0.02), Scalar(0.03)};
     const Vector3 eval_gyro_bias =
         gyro_bias + Vector3{Scalar(0.001), Scalar(0.002), Scalar(-0.003)};
-    Evaluate<24, Scalar>(scalar, test_case, "imu", sym::ImuFactor<Scalar>(integrator), pose_i, vel_i,
-                         pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
+    Evaluate<24, Scalar>(scalar, test_case, "imu", sym::ImuFactor<Scalar>(integrator), pose_i,
+                         vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
     Evaluate<27, Scalar>(scalar, test_case, "gravity",
-                         sym::ImuWithGravityFactor<Scalar>(integrator), pose_i, vel_i, pose_j, vel_j,
-                         eval_accel_bias, eval_gyro_bias, gravity, epsilon);
+                         sym::ImuWithGravityFactor<Scalar>(integrator), pose_i, vel_i, pose_j,
+                         vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
     const Scalar gravity_norm = gravity.norm();
-    const sym::Unit3<Scalar> direction =
-        sym::Unit3<Scalar>::FromUnitVector(gravity / gravity_norm);
-    Evaluate<26, Scalar>(
-        scalar, test_case, "direction", sym::ImuWithGravityDirectionFactor<Scalar>(integrator),
-        pose_i, vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, direction, gravity_norm,
-        epsilon);
+    const sym::Unit3<Scalar> direction = sym::Unit3<Scalar>::FromUnitVector(gravity / gravity_norm);
+    Evaluate<26, Scalar>(scalar, test_case, "direction",
+                         sym::ImuWithGravityDirectionFactor<Scalar>(integrator), pose_i, vel_i,
+                         pose_j, vel_j, eval_accel_bias, eval_gyro_bias, direction, gravity_norm,
+                         epsilon);
   }
 }
 }  // namespace
