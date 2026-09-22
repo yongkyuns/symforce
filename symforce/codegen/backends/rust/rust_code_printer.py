@@ -225,12 +225,14 @@ class RustCodePrinter(SympyRustCodePrinter):
         printed_dividend = self._print(dividend)
         printed_divisor = self._print(divisor)
         if self.scalar_type == ScalarType.GENERIC.value:
-            # num_traits::Float does not expose rem_euclid. Express the same
-            # non-negative result through %, abs, and one correction.
+            # num_traits::Float does not expose rem_euclid. Match its algorithm
+            # directly instead of using (r + |d|) % |d|: for r > 0 and a very
+            # large divisor, that addition can round back to |d| and erase r.
+            remainder = f"(({printed_dividend}) % ({printed_divisor}))"
             absolute_divisor = f"({printed_divisor}).abs()"
             return (
-                f"((({printed_dividend}) % ({printed_divisor})) + {absolute_divisor})"
-                f" % {absolute_divisor}"
+                f"(if {remainder} < T::zero() "
+                f"{{ {remainder} + {absolute_divisor} }} else {{ {remainder} }})"
             )
         return f"({printed_dividend}).rem_euclid({printed_divisor})"
 
