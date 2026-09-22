@@ -79,6 +79,8 @@ fn regenerated_imu_matches_the_qualified_runtime() {
             let old = runtime.preintegrated_measurements();
             let mut fresh = *old;
             let mut covariance = Matrix::<9, 9, Scalar>::zeros();
+            let mut automatic = *old;
+            let mut automatic_covariance = Matrix::<9, 9, Scalar>::zeros();
             imu_manifold_preintegration_update::sym::imu_manifold_preintegration_update(
                 &old.delta.dr, &old.delta.dv, &old.delta.dp, runtime.covariance(),
                 &old.dr_d_gyro_bias, &old.dv_d_accel_bias, &old.dv_d_gyro_bias,
@@ -90,6 +92,31 @@ fn regenerated_imu_matches_the_qualified_runtime() {
                 Some(&mut fresh.dp_d_accel_bias), Some(&mut fresh.dp_d_gyro_bias),
             );
             fresh.delta.dt += dt;
+            imu_manifold_preintegration_update_auto_derivative::sym::
+                imu_manifold_preintegration_update_auto_derivative(
+                    &old.delta.dr, &old.delta.dv, &old.delta.dp, runtime.covariance(),
+                    &old.dr_d_gyro_bias, &old.dv_d_accel_bias, &old.dv_d_gyro_bias,
+                    &old.dp_d_accel_bias, &old.dp_d_gyro_bias, &old.accel_bias, &old.gyro_bias,
+                    &accel_cov, &gyro_cov, &accel, &gyro, dt, EPSILON,
+                    Some(&mut automatic.delta.dr), Some(&mut automatic.delta.dv),
+                    Some(&mut automatic.delta.dp), Some(&mut automatic_covariance),
+                    Some(&mut automatic.dr_d_gyro_bias), Some(&mut automatic.dv_d_accel_bias),
+                    Some(&mut automatic.dv_d_gyro_bias), Some(&mut automatic.dp_d_accel_bias),
+                    Some(&mut automatic.dp_d_gyro_bias),
+                );
+            automatic.delta.dt += dt;
+            check(
+                "auto_update.measurement",
+                &fresh.to_storage(),
+                &automatic.to_storage(),
+                false,
+            );
+            check(
+                "auto_update.covariance",
+                &covariance,
+                &automatic_covariance,
+                true,
+            );
             runtime.integrate_measurement(&accel, &gyro, &accel_cov, &gyro_cov, dt, EPSILON);
             check(
                 "update.measurement",

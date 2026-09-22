@@ -41,8 +41,10 @@ as ``no_std``, and executes update, roll-forward, and factor comparisons against
 the separately C++-qualified runtime. Those comparisons explicitly disable
 output normalization to match the existing raw-storage-wrapper runtime.
 Normalized and raw geometry outputs are independently tested for every type.
-The auto-derivative update is generated and compiled; its numerical equivalence
-is not asserted by this test. The same crate tests the Unit3 chart basis.
+The auto-derivative update is generated and executed for the same deterministic
+integration samples as the handwritten-derivative update; every measurement-storage
+component and the defined lower covariance triangle are compared in both precisions.
+The same crate tests the Unit3 chart basis.
 CI uses the repository's vendored SymEngine for this full-generation test while
 retaining SymPy for the original codegen/camera modules. It cross-compiles the
 fresh crate for ``thumbv7em-none-eabihf`` and retains source, lockfile, and logs.

@@ -67,7 +67,9 @@ and all three factor functions are numerically compared against the existing C++
 runtime. These comparisons explicitly use `normalize_results=False` to match that runtime's
 raw-storage wrappers; normalization is independently covered by the geometry tests.
 Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
-and every residual/Jacobian/RHS component. The auto-derivative update is compile-qualified only.
+and every residual/Jacobian/RHS component. The auto-derivative update is also executed on every
+integration sample and compared componentwise with the freshly generated handwritten-derivative
+update, including the defined lower covariance triangle and all bias-derivative outputs.
 Unit3 tangent bases are additionally checked by finite differences of generated typed retraction,
 including directions at and near the positive-X chart singularity.
 
