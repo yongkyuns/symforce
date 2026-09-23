@@ -72,16 +72,16 @@ class RustCodePrinter(SympyRustCodePrinter):
                     # dispatching to _print_Mod. Suppress only that rewrite; expressions
                     # containing Mod must still receive rewrites such as sec -> cos and
                     # Max/Min -> Piecewise.
-                    rewriteable_functions = self._rewriteable_functions  # type: ignore[attr-defined]
+                    rewriteable_functions = self._rewriteable_functions
                     try:
-                        self._rewriteable_functions = {  # type: ignore[attr-defined]
+                        self._rewriteable_functions = {
                             name: rewrite
                             for name, rewrite in rewriteable_functions.items()
                             if name != "Mod"
                         }
                         expr = self._rewrite_known_functions(expr)  # type: ignore[attr-defined]
                     finally:
-                        self._rewriteable_functions = rewriteable_functions  # type: ignore[attr-defined]
+                        self._rewriteable_functions = rewriteable_functions
                 else:
                     expr = self._rewrite_known_functions(expr)  # type: ignore[attr-defined]
                 if isinstance(expr, sympy.Expr):
