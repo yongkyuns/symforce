@@ -1,0 +1,175 @@
+name: Rust validation
+
+on:
+  push:
+    branches: [main, codex/rust-performance-parity]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUSTUP_TOOLCHAIN: 1.98.1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  runtime:
+    name: Rust runtime and no_std
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup target add thumbv7em-none-eabihf
+          rustc --version --verbose
+          cargo --version
+      - name: Runtime unit, integration, and example targets
+        run: cargo test --locked --manifest-path rust/symforce/Cargo.toml --all-targets
+      - name: Documentation tests
+        run: cargo test --locked --manifest-path rust/symforce/Cargo.toml --doc
+      - name: Geometry without std
+        run: cargo check --locked --manifest-path rust/symforce/Cargo.toml --no-default-features
+      - name: IMU without std
+        run: cargo check --locked --manifest-path rust/symforce/Cargo.toml --no-default-features --features imu
+      - name: Bare-metal geometry and IMU
+        run: |
+          cargo check --locked --manifest-path rust/symforce/Cargo.toml --no-default-features --target thumbv7em-none-eabihf
+          cargo check --locked --manifest-path rust/symforce/Cargo.toml --no-default-features --features imu --target thumbv7em-none-eabihf
+      - name: Build all Rust example packages
+        run: |
+          set -euo pipefail
+          while IFS= read -r manifest; do
+            echo "Checking $manifest"
+            cargo check --locked --all-targets --manifest-path "$manifest"
+          done < <(find symforce/examples -path '*/rust/Cargo.toml' -type f | sort)
+      - name: Runtime formatting
+        run: cargo fmt --manifest-path rust/symforce/Cargo.toml --all -- --check
+
+  numerical:
+    name: Required Rust codegen and C++ parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        # Explicit bash uses -eo pipefail; the implicit shell only enables -e.
+        shell: bash
+        working-directory: symforce
+    env:
+      PYTHONPATH: ${{ github.workspace }}/symforce
+      SYMFORCE_SYMBOLIC_API: sympy
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: symforce
+          persist-credentials: false
+      - name: Verify failed producers cannot be hidden by tee
+        run: |
+          if (exit 23) | tee /dev/null; then
+            echo "Pipeline failure propagation is disabled" >&2
+            exit 1
+          fi
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Read exact algebra revision from the runtime lockfile
+        id: algebra
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import tomllib
+          from pathlib import Path
+          lock = tomllib.loads(Path('rust/symforce/Cargo.lock').read_text())
+          package = next(p for p in lock['package'] if p['name'] == 'stack-algebra')
+          print('revision=' + package['source'].rsplit('#', 1)[1])
+          PY
+      - uses: actions/checkout@v6
+        with:
+          repository: yongkyuns/stack-algebra
+          ref: ${{ steps.algebra.outputs.revision }}
+          path: stack-algebra
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustfmt
+      - name: Install reference build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libeigen3-dev libgmp-dev doxygen pandoc
+          python -m pip install -r requirements/dev_py312.txt
+      - name: Configure reference build without unrelated benchmark libraries
+        run: |
+          cmake -B build -D CMAKE_BUILD_TYPE=Release \
+            -D SYMFORCE_PYTHON_OVERRIDE=python3.12 \
+            -D SYMFORCE_BUILD_SYMENGINE=OFF \
+            -D SYMFORCE_BUILD_CC_SYM=OFF \
+            -D SYMFORCE_NO_FAST_MATH=ON \
+            -D SYMFORCE_BUILD_BENCHMARKS=OFF
+      - name: Build C++ qualification drivers and example references
+        id: reference
+        run: |
+          cmake --build build --parallel 2 --target \
+            symforce_rust_imu_parity symforce_rust_imu_benchmark symforce_rust_ba_reference \
+            bin.tests.symforce_examples_robot_2d_localization_test \
+            bin.tests.symforce_examples_robot_3d_localization_test \
+            bin.tests.symforce_examples_bundle_adjustment_test \
+            bin.tests.symforce_examples_bundle_adjustment_fixed_size_test
+          python -m pip install build/lcmtypes/python2.7
+      - name: Record qualification provenance
+        run: |
+          mkdir -p build/rust-validation
+          {
+            git rev-parse HEAD
+            git -C ../stack-algebra rev-parse HEAD
+            rustc --version --verbose
+            cargo --version
+            c++ --version
+            lscpu
+          } > build/rust-validation/toolchains.txt
+          cp rust/symforce/Cargo.lock build/rust-validation/runtime-Cargo.lock
+          cp build/CMakeCache.txt build/rust-validation/CMakeCache.txt
+      - name: Required generated-code tests (no skipped or empty suites)
+        run: |
+          set -uo pipefail
+          failed=0
+          for test in \
+            test/symforce_required_test_runner_test.py \
+            test/symforce_imu_parity_protocol_test.py \
+            test/symforce_rust_example_parity_protocol_test.py \
+            test/symforce_rust_codegen_runtime_test.py \
+            test/symforce_rust_codegen_test.py \
+            test/symforce_rust_stack_algebra_codegen_test.py \
+            test/symforce_rust_camera_cross_language_test.py \
+            test/symforce_examples_*_rust_codegen_test.py; do
+            python tools/run_required_test.py "$test" 2>&1 | tee "build/rust-validation/$(basename "$test").log" || failed=1
+          done
+          exit "$failed"
+      - name: Complete f32/f64 IMU state and factor parity
+        if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
+        run: |
+          python symforce/examples/imu_parity.py \
+            --cpp-binary bin/tests/imu_preintegration_parity \
+            --output-dir build/rust-validation/imu 2>&1 | tee build/rust-validation/imu.log
+      - name: End-to-end localization and bundle-adjustment parity
+        if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
+        run: python symforce/examples/rust_parity.py --build-dir build 2>&1 | tee build/rust-validation/examples.log
+      - name: Execute comparative IMU benchmark
+        if: ${{ !cancelled() && steps.reference.outcome == 'success' }}
+        run: |
+          python symforce/examples/imu_benchmark.py \
+            --cpp-binary bin/tests/imu_preintegration_benchmark --runs 3 \
+            2>&1 | tee build/rust-validation/benchmark.log
+      - name: Upload numerical qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-numerical-qualification-${{ github.sha }}
+          path: symforce/build/rust-validation
+          if-no-files-found: warn

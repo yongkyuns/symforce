@@ -83,6 +83,28 @@ if(SYMFORCE_ADD_PYTHON_TESTS)
   endforeach()
 endif()
 
+# Standalone drivers for Rust qualification. These deliberately do not depend on the
+# comparative benchmark package (GTSAM/Ceres/Sophus). Python runs both implementations
+# and checks their outputs; running either driver alone is not a parity test.
+foreach(DRIVER parity benchmark)
+  set(TARGET_NAME symforce_rust_imu_${DRIVER})
+  add_executable(${TARGET_NAME}
+    ../symforce/benchmarks/imu_preintegration/imu_preintegration_${DRIVER}.cc
+  )
+  target_link_libraries(${TARGET_NAME} PRIVATE symforce_slam)
+  set_target_properties(${TARGET_NAME} PROPERTIES
+    OUTPUT_NAME imu_preintegration_${DRIVER}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/tests
+  )
+endforeach()
+
+add_executable(symforce_rust_ba_reference ../tools/rust_bundle_adjustment_reference.cc)
+target_link_libraries(symforce_rust_ba_reference PRIVATE symforce_examples symforce_opt)
+set_target_properties(symforce_rust_ba_reference PROPERTIES
+  OUTPUT_NAME rust_bundle_adjustment_reference
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/tests
+)
+
 get_directory_property(have_parent_scope PARENT_DIRECTORY)
 if(have_parent_scope)
   set(SYMFORCE_CC_TEST_TARGETS "${SYMFORCE_CC_TEST_TARGETS}" PARENT_SCOPE)

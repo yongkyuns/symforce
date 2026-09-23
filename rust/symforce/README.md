@@ -13,3 +13,6 @@ This crate consolidates the SymForce-specific Rust layers into one package:
 The generic `stack-algebra` crate remains an independent dependency. Geometry-only users can
 disable default features with `default-features = false`; optimization requires the `std` and
 `opt` features.
+
+See [Validation and reproduction](VALIDATION.md) for required checks, numerical comparison
+budgets, retained qualification evidence, and the limits of the current port.

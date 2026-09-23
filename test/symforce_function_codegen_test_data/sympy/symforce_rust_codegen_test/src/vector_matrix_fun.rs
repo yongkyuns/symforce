@@ -38,10 +38,10 @@ pub mod sym {
 
         // Output terms (1)
 
-        nalgebra::SVector::<f64, 3>::new(
-            mat33[(0, 0)] * vec3[0] + mat33[(0, 1)] * vec3[1] + mat33[(0, 2)] * vec3[2],
-            mat33[(1, 0)] * vec3[0] + mat33[(1, 1)] * vec3[1] + mat33[(1, 2)] * vec3[2],
-            mat33[(2, 0)] * vec3[0] + mat33[(2, 1)] * vec3[1] + mat33[(2, 2)] * vec3[2],
-        )
+        let mut res = <nalgebra::SVector<f64, 3>>::zeros();
+        res[0] = mat33[(0, 0)] * vec3[0] + mat33[(0, 1)] * vec3[1] + mat33[(0, 2)] * vec3[2];
+        res[1] = mat33[(1, 0)] * vec3[0] + mat33[(1, 1)] * vec3[1] + mat33[(1, 2)] * vec3[2];
+        res[2] = mat33[(2, 0)] * vec3[0] + mat33[(2, 1)] * vec3[1] + mat33[(2, 2)] * vec3[2];
+        res
     }
 } // mod sym
