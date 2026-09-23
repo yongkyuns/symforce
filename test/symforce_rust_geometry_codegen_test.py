@@ -26,6 +26,7 @@ from symforce.codegen.codegen import CodeGenerationException
 from symforce.slam.imu_preintegration.generate import generate_manifold_imu_preintegration
 from symforce.test_util import TestCase
 from symforce.test_util import requires_source_build
+from symforce.test_util import slow_on_sympy
 from symforce.values import Values
 
 # Independently enumerate the public contract rather than deriving test cases from
@@ -202,7 +203,9 @@ class RustGeometryCodegenTest(TestCase):
                             config=config,
                         ).generate_function(directory, skip_directory_nesting=True)
 
+    # Full SymEngine generation stays mandatory in Rust validation; SymPy is opt-in.
     @requires_source_build
+    @slow_on_sympy
     @unittest.skipUnless(shutil.which("cargo") and shutil.which("rustfmt"), "Rust tools missing")
     def test_fresh_geometry_and_imu_execute(self) -> None:
         repo = Path(__file__).resolve().parents[1]
