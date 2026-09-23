@@ -65,6 +65,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Record tested source provenance
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir -p build/ci-diagnostics
+          {
+            printf 'run_id=%s\nrun_attempt=%s\nevent_sha=%s\npr_head=%s\npr_base=%s\n' \
+              "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" "$PR_HEAD_SHA" "$PR_BASE_SHA"
+            git show -s --format='commit=%H%ntree=%T%nparents=%P' HEAD
+            git ls-tree -r HEAD -- .github/workflows/ci.yml Makefile pyproject.toml \
+              symforce/codegen/backends/rust test/symforce_linter_test.py
+          } > build/ci-diagnostics/provenance.txt
+
       # - Installing software-properties-common adds add-apt-repository
       - name: Update install tools
         run: |
@@ -139,14 +153,36 @@ jobs:
 
       # lcmtypes and symforce need to be available for tests
       - name: Run tests
+        shell: bash
         run: |
           pip install build/lcmtypes/python2.7
           export PYTHONPATH=$PYTHONPATH:$(pwd)
-          EXIT_CODE=0
-          ctest --test-dir build -j $(nproc) || EXIT_CODE=$?
-          if [ $EXIT_CODE -ne 0 ]; then
-            ctest --test-dir build -j $(nproc) --rerun-failed --output-on-failure
+          sha256sum Makefile pyproject.toml symforce/codegen/backends/rust/rust_code_printer.py \
+            test/symforce_linter_test.py > build/ci-diagnostics/test-inputs.sha256
+          git diff --name-status HEAD > build/ci-diagnostics/worktree-before-tests.txt
+          # Keep both attempts: CTest overwrites LastTest.log on a rerun.
+          set +e
+          ctest --test-dir build -j $(nproc) 2>&1 | tee build/ci-diagnostics/ctest-initial.log
+          statuses=("${PIPESTATUS[@]}")
+          set -e
+          if [ "${statuses[1]}" -ne 0 ]; then
+            exit "${statuses[1]}"
           fi
+          if [ "${statuses[0]}" -ne 0 ]; then
+            ctest --test-dir build -j $(nproc) --rerun-failed --output-on-failure 2>&1 \
+              | tee build/ci-diagnostics/ctest-rerun.log
+          fi
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.os }}-python${{ matrix.python }}-${{ matrix.compiler.C }}
+          path: |
+            build/ci-diagnostics
+            build/Testing/Temporary/LastTest.log
+            build/Testing/Temporary/LastTestsFailed.log
+          retention-days: 14
 
       # Upload the docs as an artifact
       # To view, download the `docs` artifact from the build and matrix entry you're interested in
