@@ -19,6 +19,7 @@ from symforce import typing as T
 class ScalarType(Enum):
     FLOAT = float32
     DOUBLE = float64
+    GENERIC = "generic"
 
 
 _sympy_version = tuple(map(int, sympy.__version__.split(".")))
@@ -89,8 +90,9 @@ class RustCodePrinter(SympyRustCodePrinter):
                         expr = expr.replace(src_func, dst_func)
             return super().doprint(expr, assign_to)
 
-    @staticmethod
-    def _print_Zero(expr: sympy.Expr) -> str:
+    def _print_Zero(self, expr: sympy.Expr, _type: T.Any = None) -> str:
+        if self.scalar_type == ScalarType.GENERIC.value:
+            return "T::zero()"
         return "0.0"
 
     def _print_Integer(self, expr: sympy.Integer, _type: T.Any = None) -> T.Any:
@@ -104,6 +106,14 @@ class RustCodePrinter(SympyRustCodePrinter):
             return f"{expr.p}_f32"
         if self.scalar_type is float64:
             return f"{expr.p}_f64"
+        if self.scalar_type == ScalarType.GENERIC.value:
+            if expr.p == 0:
+                return "T::zero()"
+            if expr.p == 1:
+                return "T::one()"
+            if expr.p == -1:
+                return "-T::one()"
+            return f"T::from({expr.p}).unwrap()"
         assert False, f"Scalar type {self.scalar_type} not supported"
 
     def _print_Mul(self, expr: sympy.Expr) -> str:
@@ -134,7 +144,8 @@ class RustCodePrinter(SympyRustCodePrinter):
         # needlessly expensive, especially for f32.  These rewrites preserve
         # the intended real-valued algebra while avoiding a libm call.
         if expr.exp == -1:
-            return f"1.0 / ({base})"
+            one = "T::one()" if self.scalar_type == ScalarType.GENERIC.value else "1.0"
+            return f"{one} / ({base})"
         if expr.exp == 2:
             return f"({base} * {base})"
         if expr.exp == 3:
@@ -176,6 +187,8 @@ class RustCodePrinter(SympyRustCodePrinter):
             return f"{super()._print_Float(flt)}_f32"
         if self.scalar_type is float64:
             return f"{super()._print_Float(flt)}_f64"
+        if self.scalar_type == ScalarType.GENERIC.value:
+            return f"T::from({super()._print_Float(flt)}_f64).unwrap()"
 
         raise NotImplementedError(f"Scalar type {self.scalar_type} not supported")
 
@@ -184,6 +197,8 @@ class RustCodePrinter(SympyRustCodePrinter):
             return "core::f32::consts::PI"
         if self.scalar_type is float64:
             return "core::f64::consts::PI"
+        if self.scalar_type == ScalarType.GENERIC.value:
+            return "T::from(core::f64::consts::PI).unwrap()"
 
         raise NotImplementedError(f"Scalar type {self.scalar_type} not supported")
 
@@ -217,9 +232,21 @@ class RustCodePrinter(SympyRustCodePrinter):
         return "{}.min({})".format(self._print_caller_var(expr.args[0]), self._print(expr.args[1]))
 
     def _print_Mod(self, expr: sympy.Mod) -> str:
-        """Print floating-point modulo with Rust's non-negative remainder semantics."""
+        """Print floating-point modulo with non-negative remainder semantics."""
         dividend, divisor = expr.args
-        return "({}).rem_euclid({})".format(self._print(dividend), self._print(divisor))
+        printed_dividend = self._print(dividend)
+        printed_divisor = self._print(divisor)
+        if self.scalar_type == ScalarType.GENERIC.value:
+            # num_traits::Float does not expose rem_euclid. Match its algorithm
+            # directly instead of using (r + |d|) % |d|: for r > 0 and a very
+            # large divisor, that addition can round back to |d| and erase r.
+            remainder = f"(({printed_dividend}) % ({printed_divisor}))"
+            absolute_divisor = f"({printed_divisor}).abs()"
+            return (
+                f"(if {remainder} < T::zero() "
+                f"{{ {remainder} + {absolute_divisor} }} else {{ {remainder} }})"
+            )
+        return f"({printed_dividend}).rem_euclid({printed_divisor})"
 
     def _print_floor(self, expr: sympy.Function) -> str:
         """Print the floor function using Rust's floating-point method."""
@@ -243,6 +270,10 @@ class RustCodePrinter(SympyRustCodePrinter):
             float_suffix = "f32"
         elif self.scalar_type is float64:
             float_suffix = "f64"
+        elif self.scalar_type == ScalarType.GENERIC.value:
+            numerator = self._print_Integer(sympy.Integer(p))
+            denominator = self._print_Integer(sympy.Integer(q))
+            return f"({numerator}/{denominator})"
 
         return f"({p}_{float_suffix}/{q}_{float_suffix})"
 
@@ -251,12 +282,15 @@ class RustCodePrinter(SympyRustCodePrinter):
             return "core::f32::consts::E"
         elif self.scalar_type is float64:
             return "core::f64::consts::E"
+        elif self.scalar_type == ScalarType.GENERIC.value:
+            return "T::from(core::f64::consts::E).unwrap()"
 
         raise NotImplementedError(f"Scalar type {self.scalar_type} not supported")
 
     def _print_sign(self, expr: sympy.sign) -> str:
         arg = self._print(expr.args[0])
-        return f"(if ({arg} == 0.0) {{0.0}} else {{({arg}).signum()}})"
+        zero = "T::zero()" if self.scalar_type == ScalarType.GENERIC.value else "0.0"
+        return f"(if ({arg} == {zero}) {{{zero}}} else {{({arg}).signum()}})"
 
     def _print_SignNoZero(self, expr: sf.SymPySignNoZero) -> str:
         # SignNoZero can wrap an arbitrary expression (SymEngine commonly reduces

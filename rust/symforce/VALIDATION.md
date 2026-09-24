@@ -62,12 +62,12 @@ Unrelated classes with matching names and geometry types on nalgebra remain unsu
 
 The test calls the original `generate_manifold_imu_preintegration` entry point without symbolic
 storage wrappers or postprocessing. All six functions, including the auto-derivative update, are
-generated and compiled in f32/f64. The newly generated handwritten-derivative update, roll-forward,
-and all three factor functions are numerically compared against the existing C++-qualified Rust
-runtime. These comparisons explicitly use `normalize_results=False` to match that runtime's
-raw-storage wrappers; normalization is independently covered by the geometry tests.
-Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
-and every residual/Jacobian/RHS component.
+generated in concrete f32, concrete f64, and generic scalar mode. The newly generated
+handwritten-derivative update, roll-forward, and all three factor functions are numerically compared
+against the existing C++-qualified Rust runtime. These comparisons explicitly use
+`normalize_results=False` to match that runtime's raw-storage wrappers; normalization is
+independently covered by the geometry tests. Comparisons cover measurement storage, the defined
+lower covariance and Hessian triangles, and every residual/Jacobian/RHS component.
 
 The auto-derivative update is executed against an independent test-only derivative of the
 regularized quaternion update. The reference differentiates quaternion composition and rotated
@@ -99,10 +99,24 @@ export SYMFORCE_RUST_CODEGEN_EVIDENCE="$PWD/build/rust-validation/geometry-codeg
 python tools/run_required_test.py test/symforce_rust_geometry_codegen_test.py
 ```
 
-The generated crate itself is `no_std`; CI executes its host tests and cross-compiles its library
-for the requested target. The evidence directory contains generated source, its Cargo.lock, and
-compiler/test output, not build products. This is fresh concrete-scalar generation, not yet
-byte-for-byte regeneration of the checked-in scalar-generic runtime kernels.
+### Shared concrete and generic scalar qualification
+
+The generated crate is `no_std`. The generic module is emitted once with
+`T: Float + MatrixScalar + ReductionScalar` signatures and instantiated at both f32 and f64 in
+host tests. All four combinations (concrete f32, concrete f64, generic f32, generic f64) run the same
+27 tests: 24 geometry storage/normalization tests, method receivers, the Unit3 chart derivative, and
+the complete IMU contract. The expected suite contains 108 tests. The generic IMU contract executes
+all six functions, including 77 updates per precision against the same autodiff reference, rather
+than just checking that generic function definitions compile. Epsilon, absolute budgets, and
+relative budgets are shared by emission mode; generic code receives no weaker numerical contract.
+Generic scalar mode is restricted to stack-algebra.
+
+CI also checks the generated library for `thumbv7em-none-eabihf`. That check does not execute the
+host test suite on the target or prove physical-MCU behavior. A separate small generated function
+executes at f32 and f64 to cover generic arithmetic emission. The evidence directory contains
+generated source, Cargo.lock, and compiler/test output, not build products. This is fresh concrete
+and generic function generation, not byte-for-byte regeneration or replacement of the checked-in
+scalar-generic runtime kernels.
 
 ## Complete IMU comparisons
 
@@ -117,9 +131,8 @@ for the fixed-gravity, variable-gravity, and gravity-direction factor parameteri
 is evaluated both with covariance-derived square-root information and with a deterministic,
 non-diagonal lower-triangular square-root-information matrix. This broader branch is deliberately
 shared with the fresh-generation contract so it can distinguish generator errors from stale runtime
-kernels. Hessians
-are symmetrized from their defined lower triangle on both sides; unspecified upper-triangle memory
-is not treated as a numerical output.
+kernels. Hessians are symmetrized from their defined lower triangle on both sides; unspecified
+upper-triangle memory is not treated as a numerical output.
 
 The f64 budget remains `1e-11 + 2e-10 * abs(reference_component)`. The f32 budget is
 `1e-6 * max(field_max_abs, 1e-30) + 2e-4 * abs(reference_component)`, allowing norm-scaled floating-point
@@ -144,7 +157,8 @@ guarantee.
 ## Deliberate boundaries
 
 This baseline does not redesign optimization APIs, generalize the dataset-specific BAL fast path,
-implement sparse generated outputs, or establish complete regeneration of every checked-in generic
-IMU kernel. The current executable example parity helper checks selected optimization results, not
-every solver trajectory or failure mode. Those are separate follow-up workstreams; do not interpret
-the new CI as proving them.
+implement sparse generated outputs, or establish replacement/regeneration of the checked-in generic
+IMU runtime kernels. Generic generation is qualified separately before any runtime switch.
+The current executable example parity helper checks selected optimization results, not every solver
+trajectory or failure mode. Those are separate follow-up workstreams; do not interpret the new CI
+as proving them.
