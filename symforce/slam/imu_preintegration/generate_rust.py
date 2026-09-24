@@ -114,7 +114,9 @@ def main() -> None:
     """Generate a new package, or fail if an existing package is not reproducible."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--check", action="store_true", help="Compare without writing to output-dir")
+    parser.add_argument(
+        "--check", action="store_true", help="Compare without writing to output-dir"
+    )
     parser.add_argument("--geometry-crate", default="symforce-rust")
     args = parser.parse_args()
     symforce.set_epsilon_to_symbol()
