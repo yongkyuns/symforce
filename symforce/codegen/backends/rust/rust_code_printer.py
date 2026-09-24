@@ -187,13 +187,14 @@ class RustCodePrinter(SympyRustCodePrinter):
 
         raise NotImplementedError(f"Scalar type {self.scalar_type} not supported")
 
-    def _print_caller_var(self, expr: sympy.Expr) -> str:
+    def _print_caller_var(self, expr: sympy.Basic) -> str:
         """Render a typed, precedence-safe receiver for a Rust method call."""
+        assert isinstance(expr, sympy.Expr), "Rust method receivers must be scalar expressions"
         # Our numeric printers already add scalar suffixes. Do not dispatch
         # SymPy's private _type keyword to special printers such as Zero or
         # Rational. Zero is untyped elsewhere, but a receiver needs its type.
         if expr is sympy.S.Zero:
-            return self._print_Integer(expr)
+            return self._print_Integer(sympy.Integer(0))
         printed = self._print(expr)
         if expr.is_Atom and not expr.could_extract_minus_sign():
             return printed
