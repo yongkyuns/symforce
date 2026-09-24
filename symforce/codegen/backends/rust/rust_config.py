@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from sympy.printing.codeprinter import CodePrinter
-
 from symforce import typing as T
 from symforce.codegen.backends.rust import rust_code_printer
 from symforce.codegen.codegen_config import CodegenConfig
@@ -73,7 +71,8 @@ class RustConfig(CodegenConfig):
         return self.geometry_crate.replace("-", "_")
 
     def supports_geometry_type(self, value_type: T.Type) -> bool:
-        """Whether a symbolic type has the Rust runtime's storage interface.
+        """
+        Whether a symbolic type has the Rust runtime's storage interface.
 
         Keep argument types, input storage, and output construction on one boundary.
         Exact type identity avoids accepting an unrelated class with the same name.
@@ -84,7 +83,7 @@ class RustConfig(CodegenConfig):
 
         import symforce.symbolic as sf
 
-        return value_type in (
+        return value_type in {
             sf.Rot2,
             sf.Pose2,
             sf.Rot3,
@@ -97,10 +96,11 @@ class RustConfig(CodegenConfig):
             sf.SphericalCameraCal,
             sf.OrthographicCameraCal,
             sf.EquirectangularCameraCal,
-        )
+        }
 
     def geometry_normalization_dim(self, value_type: T.Type) -> int:
-        """Leading storage components projected by ``normalize_results``.
+        """
+        Leading storage components projected by ``normalize_results``.
 
         Poses normalize only their rotation, never their translation. Camera
         calibration storage is unconstrained here, matching the C++ constructors.
@@ -110,9 +110,9 @@ class RustConfig(CodegenConfig):
 
         import symforce.symbolic as sf
 
-        if value_type in (sf.Rot2, sf.Pose2):
+        if value_type in {sf.Rot2, sf.Pose2}:
             return 2
-        if value_type in (sf.Rot3, sf.Pose3):
+        if value_type in {sf.Rot3, sf.Pose3}:
             return 4
         if value_type is sf.Unit3:
             return 3
@@ -130,7 +130,7 @@ class RustConfig(CodegenConfig):
     def templates_to_render(generated_file_name: str) -> T.List[T.Tuple[str, str]]:
         return [("function/FUNCTION.rs.jinja", f"{generated_file_name}.rs")]
 
-    def printer(self) -> CodePrinter:
+    def printer(self) -> rust_code_printer.RustCodePrinter:
         kwargs: T.Mapping[str, T.Any] = {}
         return rust_code_printer.RustCodePrinter(scalar_type=self.scalar_type, **kwargs)
 

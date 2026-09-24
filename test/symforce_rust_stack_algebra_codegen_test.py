@@ -237,10 +237,14 @@ mod tests {
 
     def test_sign_no_zero_parenthesizes_composite_argument(self) -> None:
         x, y = sf.Symbol("x"), sf.Symbol("y")
-        generated = RustConfig(
-            scalar_type=ScalarType.DOUBLE,
-            algebra=RustAlgebra.STACK_ALGEBRA,
-        ).printer().doprint(sf.sign_no_zero(x + y))
+        generated = (
+            RustConfig(
+                scalar_type=ScalarType.DOUBLE,
+                algebra=RustAlgebra.STACK_ALGEBRA,
+            )
+            .printer()
+            .doprint(sf.sign_no_zero(x + y))
+        )
         self.assertEqual(generated, "(x + y).signum()")
 
     def test_method_printers_parenthesize_composite_receivers(self) -> None:

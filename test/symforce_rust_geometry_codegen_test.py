@@ -62,7 +62,7 @@ SCALAR_CONTRACTS = {
 
 
 def unit3_retract(direction: sf.Unit3, delta: sf.V2, epsilon: sf.Scalar) -> sf.Unit3:
-    return direction.retract(delta, epsilon)
+    return direction.retract(delta.to_storage(), epsilon)
 
 
 def unit3_basis(direction: sf.Unit3, epsilon: sf.Scalar) -> sf.Matrix32:
@@ -281,9 +281,7 @@ class RustGeometryCodegenTest(TestCase):
                         Codegen.function(function, config=config).generate_function(
                             module, skip_directory_nesting=True
                         )
-                    source = "\n".join(
-                        f"mod {path.stem};" for path in sorted(module.glob("*.rs"))
-                    )
+                    source = "\n".join(f"mod {path.stem};" for path in sorted(module.glob("*.rs")))
                     # One generated generic module is instantiated at both scalar types.
                     # Reuse the exact concrete contracts instead of a weaker compile-only gate.
                     for scalar_name in test_scalars:
@@ -319,8 +317,14 @@ class RustGeometryCodegenTest(TestCase):
                 if target:
                     commands.append(
                         [
-                            "cargo", "check", "--locked", "--manifest-path", str(manifest),
-                            "--lib", "--target", target,
+                            "cargo",
+                            "check",
+                            "--locked",
+                            "--manifest-path",
+                            str(manifest),
+                            "--lib",
+                            "--target",
+                            target,
                         ]
                     )
                 for index, command in enumerate(commands):
