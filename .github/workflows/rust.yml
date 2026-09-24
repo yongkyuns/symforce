@@ -150,6 +150,7 @@ jobs:
             test/symforce_rust_example_parity_protocol_test.py \
             test/symforce_rust_codegen_runtime_test.py \
             test/symforce_rust_codegen_test.py \
+            test/symforce_rust_imu_generation_test.py \
             test/symforce_rust_stack_algebra_codegen_test.py \
             test/symforce_rust_camera_cross_language_test.py \
             test/symforce_examples_*_rust_codegen_test.py; do

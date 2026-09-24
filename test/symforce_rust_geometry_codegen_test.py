@@ -8,6 +8,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from dataclasses import replace
@@ -210,6 +211,38 @@ class RustGeometryCodegenTest(TestCase):
                             config=config,
                         ).generate_function(directory, skip_directory_nesting=True)
 
+    def generate_generic_package(self, module: Path, geometry_crate: str, evidence: Path) -> None:
+        # Qualify the public command across fresh processes and distinct Python hash seeds.
+        for check in (False, True):
+            command = [
+                sys.executable,
+                "-m",
+                "symforce.slam.imu_preintegration.generate_rust",
+                "--output-dir",
+                str(module),
+                "--geometry-crate",
+                geometry_crate,
+            ]
+            if check:
+                command.append("--check")
+            seed = "1" if check else "0"
+            result = subprocess.run(
+                command,
+                cwd=Path(__file__).resolve().parents[1],
+                env=dict(
+                    os.environ,
+                    SYMFORCE_SYMBOLIC_API=symforce.get_symbolic_api(),
+                    PYTHONHASHSEED=seed,
+                ),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            (evidence / f"imu-regeneration-{seed}.log").write_text(
+                f"command={command!r}\nhash_seed={seed}\n" + result.stdout + result.stderr
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     # Full SymEngine generation stays mandatory in Rust validation; SymPy is opt-in.
     @requires_source_build
     @slow_on_sympy
@@ -236,7 +269,6 @@ class RustGeometryCodegenTest(TestCase):
                     (ScalarType.GENERIC, "generic", ("f32", "f64")),
                 ):
                     module = src / module_name
-                    module.mkdir()
                     config = RustConfig(
                         algebra=RustAlgebra.STACK_ALGEBRA,
                         scalar_type=scalar,
@@ -245,7 +277,11 @@ class RustGeometryCodegenTest(TestCase):
                     )
                     # Match the existing storage-wrapper runtime without altering
                     # symbolic functions or postprocessing the generated source.
-                    generate_manifold_imu_preintegration(config, module)
+                    if scalar is ScalarType.GENERIC:
+                        self.generate_generic_package(module, config.geometry_crate, root)
+                    else:
+                        module.mkdir()
+                        generate_manifold_imu_preintegration(config, module)
                     self.assertEqual({path.stem for path in module.glob("*.rs")}, IMU_MODULES)
                     tests = [METHOD_RECEIVER_CONTRACT]
                     for geometry_type in GEOMETRY_TYPES:
