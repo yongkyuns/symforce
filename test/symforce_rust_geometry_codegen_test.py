@@ -57,7 +57,7 @@ IMU_MODULES = {
 
 
 def unit3_retract(direction: sf.Unit3, delta: sf.V2, epsilon: sf.Scalar) -> sf.Unit3:
-    return direction.retract(delta, epsilon)
+    return direction.retract(delta.to_storage(), epsilon)
 
 
 def unit3_basis(direction: sf.Unit3, epsilon: sf.Scalar) -> sf.Matrix32:
@@ -307,8 +307,14 @@ class RustGeometryCodegenTest(TestCase):
                 if target:
                     commands.append(
                         [
-                            "cargo", "check", "--locked", "--manifest-path", str(manifest),
-                            "--lib", "--target", target,
+                            "cargo",
+                            "check",
+                            "--locked",
+                            "--manifest-path",
+                            str(manifest),
+                            "--lib",
+                            "--target",
+                            target,
                         ]
                     )
                 for index, command in enumerate(commands):
