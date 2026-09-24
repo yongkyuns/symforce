@@ -5,6 +5,7 @@
 
 """Execute typed Rust geometry outputs and the unmodified symbolic IMU generator."""
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -60,6 +61,30 @@ SCALAR_CONTRACTS = {
     "f32": ("1e-6", "0.0", "2e-4"),
     "f64": ("1e-9", "1e-11", "2e-10"),
 }
+
+
+# Frozen pre-migration kernel blobs from f8a9aa72, not the moving production runtime.
+LEGACY_IMU_BLOBS = {
+    "imu_manifold_preintegration_update.rs": "50687437ce79901b61f0cc4da0761babd3efbc3e",
+    "roll_forward_state.rs": "d3670f7e1a6dac08710b20fda8e26639fd6c748f",
+}
+
+
+def verify_legacy_imu_snapshot(directory: Path) -> None:
+    """Require the exact frozen kernel inventory and original Git blob bytes."""
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError("Legacy IMU snapshot must be a regular directory")
+    if {path.name for path in directory.iterdir()} != set(LEGACY_IMU_BLOBS):
+        raise ValueError("Legacy IMU snapshot inventory changed")
+    for name, expected in LEGACY_IMU_BLOBS.items():
+        path = directory / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"Not a regular legacy IMU file: {name}")
+        content = path.read_bytes()
+        header = f"blob {len(content)}\0".encode("ascii")
+        actual = hashlib.sha1(header + content, usedforsecurity=False).hexdigest()
+        if actual != expected:
+            raise ValueError(f"Legacy IMU snapshot changed: {name}")
 
 
 def unit3_retract(direction: sf.Unit3, delta: sf.V2, epsilon: sf.Scalar) -> sf.Unit3:
@@ -172,6 +197,30 @@ fn normalization_{name}() {{
 
 
 class RustGeometryCodegenTest(TestCase):
+    def test_frozen_storage_reference_integrity(self) -> None:
+        data = Path(__file__).parent / "symforce_rust_geometry_codegen_test_data" / "legacy_imu"
+        verify_legacy_imu_snapshot(data)
+
+    def test_frozen_storage_reference_rejects_changes(self) -> None:
+        data = Path(__file__).parent / "symforce_rust_geometry_codegen_test_data" / "legacy_imu"
+        with tempfile.TemporaryDirectory() as directory:
+            for mutation in ("changed", "missing", "extra", "nonregular"):
+                with self.subTest(mutation=mutation):
+                    target = Path(directory) / mutation
+                    shutil.copytree(data, target)
+                    source = target / "roll_forward_state.rs"
+                    if mutation == "changed":
+                        source.write_bytes(source.read_bytes() + b"\n")
+                    elif mutation == "missing":
+                        source.unlink()
+                    elif mutation == "extra":
+                        (target / "unexpected.rs").write_text("// unexpected\n")
+                    else:
+                        source.unlink()
+                        source.mkdir()
+                    with self.assertRaises(ValueError):
+                        verify_legacy_imu_snapshot(target)
+
     def test_supported_type_identity_and_backend_boundary(self) -> None:
         stack = RustConfig(algebra=RustAlgebra.STACK_ALGEBRA)
         nalgebra = RustConfig(algebra=RustAlgebra.NALGEBRA)
@@ -246,12 +295,23 @@ class RustGeometryCodegenTest(TestCase):
     def add_storage_compatibility_contracts(self, root: Path) -> None:
         # Compile the adapter as library code and call it from a separate integration crate.
         data = Path(__file__).parent / "symforce_rust_geometry_codegen_test_data"
+        legacy = data / "legacy_imu"
+        verify_legacy_imu_snapshot(legacy)
+        copied = root / "src" / "legacy_imu"
+        shutil.copytree(legacy, copied)
+        verify_legacy_imu_snapshot(copied)
+        (copied / "mod.rs").write_text(
+            "".join(f"pub mod {Path(name).stem};\n" for name in sorted(LEGACY_IMU_BLOBS))
+        )
         generic = root / "src" / "generic"
         shutil.copyfile(data / "imu_storage_adapters.rs", generic / "imu_storage_adapters.rs")
         with (generic / "mod.rs").open("a") as stream:
             stream.write("\npub mod imu_storage_adapters;\n")
         with (root / "src" / "lib.rs").open("a") as stream:
             stream.write("pub use generic::imu_storage_adapters;\n")
+            # Preserve the old source's crate spelling without rewriting any kernel bytes.
+            stream.write("extern crate geometry_runtime as symforce_rust;\n")
+            stream.write("pub mod legacy_imu;\n")
         integration = root / "tests"
         integration.mkdir()
         contracts = (data / "imu_storage_contracts.rs").read_text()

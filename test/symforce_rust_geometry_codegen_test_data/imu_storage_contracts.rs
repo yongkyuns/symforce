@@ -3,7 +3,8 @@
 use geometry_runtime::{Pose3, PreintegratedImuMeasurementsT, Rot3};
 use stack_algebra::{Float, Matrix, MatrixScalar, ReductionScalar, Vector};
 use symforce_rust_geometry_contracts::imu_storage_adapters as candidate;
-use geometry_runtime::imu::generated as legacy;
+use geometry_runtime::imu::generated as live;
+use symforce_rust_geometry_contracts::legacy_imu as legacy;
 
 type UpdateKernel<T> = fn(
     &Rot3<T>,
@@ -47,16 +48,18 @@ type RollKernel<T> = fn(
 );
 
 // Keep the existing Float bound: do not accidentally require the stronger Real trait.
-fn update_kernels<T: Float + MatrixScalar + ReductionScalar>() -> [UpdateKernel<T>; 2] {
+fn update_kernels<T: Float + MatrixScalar + ReductionScalar>() -> [UpdateKernel<T>; 3] {
     [
         legacy::imu_manifold_preintegration_update::sym::imu_manifold_preintegration_update::<T>,
+        live::imu_manifold_preintegration_update::sym::imu_manifold_preintegration_update::<T>,
         candidate::imu_manifold_preintegration_update::sym::imu_manifold_preintegration_update::<T>,
     ]
 }
 
-fn roll_kernels<T: Float + MatrixScalar + ReductionScalar>() -> [RollKernel<T>; 2] {
+fn roll_kernels<T: Float + MatrixScalar + ReductionScalar>() -> [RollKernel<T>; 3] {
     [
         legacy::roll_forward_state::sym::roll_forward_state::<T>,
+        live::roll_forward_state::sym::roll_forward_state::<T>,
         candidate::roll_forward_state::sym::roll_forward_state::<T>,
     ]
 }
@@ -235,12 +238,12 @@ fn call_update(
 fn every_update_output_combination_preserves_the_public_storage_api() {
     let measurement = prior();
     let before = measurement.to_storage();
-    let [old, adapter] = update_kernels::<Scalar>();
+    let [old, current, adapter] = update_kernels::<Scalar>();
     let mut reference = UpdateOutputs::dirty();
     call_update(old, &measurement, (1 << UPDATE_OUTPUTS) - 1, &mut reference);
     for mask in 0..(1 << UPDATE_OUTPUTS) {
-        // Check legacy subset behavior as well as the new adapter against all-output evaluation.
-        for kernel in [old, adapter] {
+        // The frozen all-output oracle checks legacy subsets, the live API, and the adapter.
+        for kernel in [old, current, adapter] {
             let mut output = UpdateOutputs::dirty();
             call_update(kernel, &measurement, mask, &mut output);
             reference.check(&output, mask);
@@ -276,12 +279,12 @@ fn every_roll_forward_output_combination_preserves_the_public_storage_api() {
     let pose = Pose3::new(rotation, Vector::from_rows([[2.0], [-3.0], [1.0]]));
     let pose_before = *pose.data();
     let rotation_before = *rotation.data();
-    let [old, adapter] = roll_kernels::<Scalar>();
+    let [old, current, adapter] = roll_kernels::<Scalar>();
     let mut expected_pose = filled(SENTINEL);
     let mut expected_velocity = filled(SENTINEL);
     call_roll(old, &pose, &rotation, 3, &mut expected_pose, &mut expected_velocity);
     for mask in 0..4 {
-        for kernel in [old, adapter] {
+        for kernel in [old, current, adapter] {
             let mut actual_pose = filled(SENTINEL);
             let mut actual_velocity = filled(SENTINEL);
             call_roll(kernel, &pose, &rotation, mask, &mut actual_pose, &mut actual_velocity);
@@ -295,19 +298,21 @@ fn every_roll_forward_output_combination_preserves_the_public_storage_api() {
 
 #[test]
 fn raw_geometry_storage_is_not_normalized_or_replaced_by_identity() {
-    let [old_update, adapter_update] = update_kernels::<Scalar>();
-    let [old_roll, adapter_roll] = roll_kernels::<Scalar>();
+    let [old_update, live_update, adapter_update] = update_kernels::<Scalar>();
+    let [old_roll, live_roll, adapter_roll] = roll_kernels::<Scalar>();
     // These are storage behavior controls, not physically valid attitude/derivative fixtures.
     for w in [0.0, 2.0, -2.0] {
         let mut measurement = prior();
         measurement.delta.dr = Rot3::from_storage(Vector::from_rows([[0.0], [0.0], [0.0], [w]]));
         let mut expected = UpdateOutputs::dirty();
-        let mut actual = UpdateOutputs::dirty();
-        actual.rotation = filled(Scalar::NAN);
         call_update(old_update, &measurement, 1, &mut expected);
-        call_update(adapter_update, &measurement, 1, &mut actual);
-        expected.check(&actual, 1);
-        assert!((actual.rotation.squared_norm() - 1.0).abs() > 0.5);
+        for kernel in [live_update, adapter_update] {
+            let mut actual = UpdateOutputs::dirty();
+            actual.rotation = filled(Scalar::NAN);
+            call_update(kernel, &measurement, 1, &mut actual);
+            expected.check(&actual, 1);
+            assert!((actual.rotation.squared_norm() - 1.0).abs() > 0.5);
+        }
 
         let pose = Pose3::from_storage(Vector::from_rows([
             [0.0], [0.0], [0.0], [w], [2.0], [-3.0], [1.0],
@@ -315,13 +320,15 @@ fn raw_geometry_storage_is_not_normalized_or_replaced_by_identity() {
         let delta_rotation = Rot3::identity();
         let mut expected_pose = filled(SENTINEL);
         let mut expected_velocity = filled(SENTINEL);
-        let mut actual_pose = filled(SENTINEL);
-        let mut actual_velocity = filled(SENTINEL);
         call_roll(old_roll, &pose, &delta_rotation, 3, &mut expected_pose, &mut expected_velocity);
-        call_roll(adapter_roll, &pose, &delta_rotation, 3, &mut actual_pose, &mut actual_velocity);
-        check(&expected_pose, &actual_pose, false);
-        check(&expected_velocity, &actual_velocity, false);
-        assert_eq!(actual_pose[3], w);
+        for kernel in [live_roll, adapter_roll] {
+            let mut actual_pose = filled(SENTINEL);
+            let mut actual_velocity = filled(SENTINEL);
+            call_roll(kernel, &pose, &delta_rotation, 3, &mut actual_pose, &mut actual_velocity);
+            check(&expected_pose, &actual_pose, false);
+            check(&expected_velocity, &actual_velocity, false);
+            assert_eq!(actual_pose[3], w);
+        }
     }
 }
 
@@ -333,4 +340,24 @@ fn compatibility_comparator_rejects_corruption_and_unrequested_writes() {
     let nonfinite = filled::<3, 3>(Scalar::NAN);
     assert!(std::panic::catch_unwind(|| check(&reference, &nonfinite, false)).is_err());
     assert!(std::panic::catch_unwind(|| check_selected(&reference, &reference, 0, 0, false)).is_err());
+}
+
+#[test]
+fn agreement_between_live_and_candidate_is_not_an_independent_reference() {
+    let measurement = prior();
+    let [old, current, adapter] = update_kernels::<Scalar>();
+    let mut reference = UpdateOutputs::dirty();
+    call_update(old, &measurement, 1, &mut reference);
+    // Simulate the same defect on both moving sides of the comparison.
+    let mut outputs = [UpdateOutputs::dirty(), UpdateOutputs::dirty()];
+    for (kernel, output) in [current, adapter].into_iter().zip(outputs.iter_mut()) {
+        call_update(kernel, &measurement, 1, output);
+        reference.check(output, 1);
+        output.rotation = reference.rotation;
+        output.rotation[0] += 1.0;
+    }
+    assert_eq!(outputs[0].rotation, outputs[1].rotation);
+    for output in outputs {
+        assert!(std::panic::catch_unwind(|| reference.check(&output, 1)).is_err());
+    }
 }
