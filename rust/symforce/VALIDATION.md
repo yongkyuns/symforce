@@ -67,7 +67,26 @@ and all three factor functions are numerically compared against the existing C++
 runtime. These comparisons explicitly use `normalize_results=False` to match that runtime's
 raw-storage wrappers; normalization is independently covered by the geometry tests.
 Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
-and every residual/Jacobian/RHS component. The auto-derivative update is compile-qualified only.
+and every residual/Jacobian/RHS component.
+
+The auto-derivative update is executed against an independent test-only derivative of the
+regularized quaternion update. The reference differentiates quaternion composition and rotated
+acceleration in raw storage, projects through the input/output tangent maps, and propagates the
+full state covariance and all five bias-derivative blocks. It uses the exact same prior state and
+inputs as the generated function. The shared mean update is also compared directly with the
+handwritten variant. Seven trajectories supply 77 one-step updates per precision, including the
+original four trajectories and additional zero/near-zero corrected angular rates.
+
+Direct equality of the two derivative variants at the existing f64 budget is not a valid contract:
+`_right_jacobian` uses `sqrt(dot(phi, phi) + sqrt(epsilon))`, while `Rot3.from_tangent` uses
+`sqrt(dot(phi, phi) + epsilon**2)`. At the first original sample, `epsilon=1e-9`, `dt=0.005`, and
+`phi=(0.00095, -0.0019, 0.00035)`, their gyro-bias derivative entry (2, 0) is approximately
+`4.7497085651500935e-6` versus `4.749721082043641e-6`. An independent high-precision evaluation
+reproduces the approximately `1.25168939e-11` difference. The contract includes a negative control
+showing that the handwritten value is outside the unchanged f64 budget. It does not change either
+production algorithm, normalize the inputs, replace generated source, or widen any tolerance.
+The stable small-angle series belongs only to the independent test reference.
+
 Unit3 tangent bases are additionally checked by finite differences of generated typed retraction,
 including directions at and near the positive-X chart singularity.
 
