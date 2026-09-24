@@ -243,6 +243,31 @@ class RustGeometryCodegenTest(TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def add_storage_compatibility_contracts(self, root: Path) -> None:
+        # Compile the adapter as library code and call it from a separate integration crate.
+        data = Path(__file__).parent / "symforce_rust_geometry_codegen_test_data"
+        generic = root / "src" / "generic"
+        shutil.copyfile(data / "imu_storage_adapters.rs", generic / "imu_storage_adapters.rs")
+        with (generic / "mod.rs").open("a") as stream:
+            stream.write("\npub mod imu_storage_adapters;\n")
+        with (root / "src" / "lib.rs").open("a") as stream:
+            stream.write("pub use generic::imu_storage_adapters;\n")
+        integration = root / "tests"
+        integration.mkdir()
+        contracts = (data / "imu_storage_contracts.rs").read_text()
+        source = ""
+        for scalar_name, (epsilon, absolute, relative) in SCALAR_CONTRACTS.items():
+            source += (
+                f"mod contracts_{scalar_name} {{\n"
+                + f"type Scalar = {scalar_name};\n"
+                + f"const EPSILON: Scalar = {epsilon};\n"
+                + f"const ABSOLUTE: Scalar = {absolute};\n"
+                + f"const RELATIVE: Scalar = {relative};\n"
+                + contracts
+                + "\n}\n"
+            )
+        (integration / "imu_storage_compatibility.rs").write_text(source)
+
     # Full SymEngine generation stays mandatory in Rust validation; SymPy is opt-in.
     @requires_source_build
     @slow_on_sympy
@@ -335,6 +360,7 @@ class RustGeometryCodegenTest(TestCase):
                         )
                     (module / "mod.rs").write_text(source)
                 (src / "lib.rs").write_text("#![no_std]\nmod f32;\nmod f64;\nmod generic;\n")
+                self.add_storage_compatibility_contracts(root)
                 manifest = root / "Cargo.toml"
                 manifest.write_text(
                     '[package]\nname = "symforce-rust-geometry-contracts"\n'
@@ -347,7 +373,7 @@ class RustGeometryCodegenTest(TestCase):
                 )
                 commands = [
                     ["cargo", "generate-lockfile", "--manifest-path", str(manifest)],
-                    ["cargo", "test", "--locked", "--manifest-path", str(manifest), "--lib"],
+                    ["cargo", "test", "--locked", "--manifest-path", str(manifest), "--all-targets"],
                 ]
                 target = os.environ.get("SYMFORCE_RUST_CODEGEN_TARGET")
                 if target:
