@@ -115,6 +115,18 @@ void Run(const char* scalar, Scalar epsilon) {
     const Vector3 eval_accel_bias = accel_bias + Vector3{Scalar(0.01), Scalar(-0.02), Scalar(0.03)};
     const Vector3 eval_gyro_bias =
         gyro_bias + Vector3{Scalar(0.001), Scalar(0.002), Scalar(-0.003)};
+
+    // A deliberately non-diagonal square-root information matrix broadens factor coverage beyond
+    // the covariance-derived factor path. This is also the matrix used by the fresh Rust generator
+    // contract, so a disagreement there can be attributed to generator/runtime implementation.
+    Eigen::Matrix<Scalar, 9, 9> manual_sqrt_info = Eigen::Matrix<Scalar, 9, 9>::Zero();
+    for (int row = 0; row < 9; ++row) {
+      manual_sqrt_info(row, row) = Scalar(1) + Scalar(0.2) * Scalar(row);
+      for (int col = 0; col < row; ++col) {
+        manual_sqrt_info(row, col) = Scalar(0.01) * Scalar(row + col + 1);
+      }
+    }
+
     Evaluate<24, Scalar>(scalar, test_case, "imu", sym::ImuFactor<Scalar>(integrator), pose_i,
                          vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
     Evaluate<27, Scalar>(scalar, test_case, "gravity",
@@ -126,6 +138,16 @@ void Run(const char* scalar, Scalar epsilon) {
                          sym::ImuWithGravityDirectionFactor<Scalar>(integrator), pose_i, vel_i,
                          pose_j, vel_j, eval_accel_bias, eval_gyro_bias, direction, gravity_norm,
                          epsilon);
+    Evaluate<24, Scalar>(scalar, test_case, "manual_imu",
+                         sym::ImuFactor<Scalar>(measurement, manual_sqrt_info), pose_i, vel_i,
+                         pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
+    Evaluate<27, Scalar>(scalar, test_case, "manual_gravity",
+                         sym::ImuWithGravityFactor<Scalar>(measurement, manual_sqrt_info), pose_i,
+                         vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, gravity, epsilon);
+    Evaluate<26, Scalar>(scalar, test_case, "manual_direction",
+                         sym::ImuWithGravityDirectionFactor<Scalar>(measurement, manual_sqrt_info),
+                         pose_i, vel_i, pose_j, vel_j, eval_accel_bias, eval_gyro_bias, direction,
+                         gravity_norm, epsilon);
   }
 }
 }  // namespace

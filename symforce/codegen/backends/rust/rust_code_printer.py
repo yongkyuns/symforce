@@ -187,19 +187,34 @@ class RustCodePrinter(SympyRustCodePrinter):
 
         raise NotImplementedError(f"Scalar type {self.scalar_type} not supported")
 
+    def _print_caller_var(self, expr: sympy.Basic) -> str:
+        """Render a typed, precedence-safe receiver for a Rust method call."""
+        assert isinstance(expr, sympy.Expr), "Rust method receivers must be scalar expressions"
+        # Our numeric printers already add scalar suffixes. Do not dispatch
+        # SymPy's private _type keyword to special printers such as Zero or
+        # Rational. Zero is untyped elsewhere, but a receiver needs its type.
+        if expr is sympy.S.Zero:
+            return self._print_Integer(sympy.Integer(0))
+        printed = self._print(expr)
+        if expr.is_Atom and not expr.could_extract_minus_sign():
+            return printed
+        # Negative numeric atoms also need grouping: -2_f64.min(x) negates
+        # the result instead of applying min to the negative receiver.
+        return f"({printed})"
+
     def _print_Max(self, expr: sympy.Max) -> str:
         """
         Customizations:
             * The first argument calls the max method on the second argument.
         """
-        return "{}.max({})".format(self._print(expr.args[0]), self._print(expr.args[1]))
+        return "{}.max({})".format(self._print_caller_var(expr.args[0]), self._print(expr.args[1]))
 
     def _print_Min(self, expr: sympy.Min) -> str:
         """
         Customizations:
             * The first argument calls the min method on the second argument.
         """
-        return "{}.min({})".format(self._print(expr.args[0]), self._print(expr.args[1]))
+        return "{}.min({})".format(self._print_caller_var(expr.args[0]), self._print(expr.args[1]))
 
     def _print_Mod(self, expr: sympy.Mod) -> str:
         """Print floating-point modulo with Rust's non-negative remainder semantics."""
@@ -218,7 +233,7 @@ class RustCodePrinter(SympyRustCodePrinter):
         """
         Customizations:
         """
-        return "{}.ln()".format(self._print(expr.args[0]))
+        return "{}.ln()".format(self._print_caller_var(expr.args[0]))
 
     def _print_Rational(self, expr: sympy.Rational) -> str:
         p, q = int(expr.p), int(expr.q)
@@ -244,4 +259,7 @@ class RustCodePrinter(SympyRustCodePrinter):
         return f"(if ({arg} == 0.0) {{0.0}} else {{({arg}).signum()}})"
 
     def _print_SignNoZero(self, expr: sf.SymPySignNoZero) -> str:
-        return f"{self._print(expr.args[0])}.signum()"
+        # SignNoZero can wrap an arbitrary expression (SymEngine commonly reduces
+        # copysign_no_zero(1, a + b) to this form). Rust method-call precedence would
+        # otherwise bind signum only to the final term and change the mathematics.
+        return f"{self._print_caller_var(expr.args[0])}.signum()"

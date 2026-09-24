@@ -124,6 +124,14 @@ fn run<T: Real + MatrixScalar + ReductionScalar>(scalar: &str, epsilon: T) {
                 [T::from(0.002).unwrap()],
                 [T::from(-0.003).unwrap()],
             ]);
+        let mut manual_sqrt_info = Matrix::<9, 9, T>::zeros();
+        for row in 0..9 {
+            manual_sqrt_info[(row, row)] = T::one() + T::from(0.2).unwrap() * T::from(row).unwrap();
+            for col in 0..row {
+                manual_sqrt_info[(row, col)] =
+                    T::from(0.01).unwrap() * T::from(row + col + 1).unwrap();
+            }
+        }
         emit_factor(
             scalar,
             case,
@@ -161,6 +169,52 @@ fn run<T: Real + MatrixScalar + ReductionScalar>(scalar: &str, epsilon: T) {
             case,
             "direction",
             ImuWithGravityDirectionFactorT::from_preintegrator(&integrator).linearize(
+                &pose_i,
+                &vel_i,
+                &pose_j,
+                &vel_j,
+                &eval_accel_bias,
+                &eval_gyro_bias,
+                &direction,
+                gravity_norm,
+                epsilon,
+            ),
+        );
+        emit_factor(
+            scalar,
+            case,
+            "manual_imu",
+            ImuFactorT::new(*measurement, manual_sqrt_info).linearize(
+                &pose_i,
+                &vel_i,
+                &pose_j,
+                &vel_j,
+                &eval_accel_bias,
+                &eval_gyro_bias,
+                &gravity,
+                epsilon,
+            ),
+        );
+        emit_factor(
+            scalar,
+            case,
+            "manual_gravity",
+            ImuWithGravityFactorT::new(*measurement, manual_sqrt_info).linearize(
+                &pose_i,
+                &vel_i,
+                &pose_j,
+                &vel_j,
+                &eval_accel_bias,
+                &eval_gyro_bias,
+                &gravity,
+                epsilon,
+            ),
+        );
+        emit_factor(
+            scalar,
+            case,
+            "manual_direction",
+            ImuWithGravityDirectionFactorT::new(*measurement, manual_sqrt_info).linearize(
                 &pose_i,
                 &vel_i,
                 &pose_j,

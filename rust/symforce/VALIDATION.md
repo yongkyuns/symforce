@@ -45,18 +45,60 @@ standard-library tests. Optional developer tests remain optional outside the req
 
 The numerical CI job checks out stack-algebra alongside SymForce at the exact runtime lockfile
 revision, provides the generated C++/LCM headers, and runs the existing compilation and direct camera
-runtime comparisons without allowing their prerequisite checks to silently skip.
+runtime comparisons without allowing their prerequisite checks to silently skip. The original
+required modules continue to use SymPy. Full fresh IMU generation uses the repository's vendored
+SymEngine backend in a separate required step; the build target is `symenginepy`. Explicit backend
+selection fails if that engine cannot be imported, and its resolved module path is retained.
+
+### Typed geometry and fresh IMU generation
+
+`test/symforce_rust_geometry_codegen_test.py` covers all twelve supported geometry/camera types,
+including Unit3, in both scalar precisions. It checks direct and reused optional outputs in both
+raw-storage and normalized modes, mixed scalar/matrix outputs, and a renamed geometry dependency.
+The inherited `normalize_results=True` default projects only constrained rotation/direction
+components. Pose translations and camera parameters must remain unchanged. Zero-norm constrained
+prefixes are preserved. `normalize_results=False` preserves the symbolic output storage exactly.
+Unrelated classes with matching names and geometry types on nalgebra remain unsupported.
+
+The test calls the original `generate_manifold_imu_preintegration` entry point without symbolic
+storage wrappers or postprocessing. All six functions, including the auto-derivative update, are
+generated and compiled in f32/f64. The newly generated handwritten-derivative update, roll-forward,
+and all three factor functions are numerically compared against the existing C++-qualified Rust
+runtime. These comparisons explicitly use `normalize_results=False` to match that runtime's
+raw-storage wrappers; normalization is independently covered by the geometry tests.
+Comparisons cover measurement storage, the defined lower covariance and Hessian triangles,
+and every residual/Jacobian/RHS component. The auto-derivative update is compile-qualified only.
+Unit3 tangent bases are additionally checked by finite differences of generated typed retraction,
+including directions at and near the positive-X chart singularity.
+
+After installing dependencies, building `symenginepy`, and setting up the toolchain as in CI:
+
+```bash
+export SYMFORCE_SYMBOLIC_API=symengine
+export SYMFORCE_RUST_CODEGEN_TARGET=thumbv7em-none-eabihf
+export SYMFORCE_RUST_CODEGEN_EVIDENCE="$PWD/build/rust-validation/geometry-codegen"
+python tools/run_required_test.py test/symforce_rust_geometry_codegen_test.py
+```
+
+The generated crate itself is `no_std`; CI executes its host tests and cross-compiles its library
+for the requested target. The evidence directory contains generated source, its Cargo.lock, and
+compiler/test output, not build products. This is fresh concrete-scalar generation, not yet
+byte-for-byte regeneration of the checked-in scalar-generic runtime kernels.
 
 ## Complete IMU comparisons
 
 The paired IMU drivers emit a strict, shaped, row-major protocol. There are 12 deterministic cases
-per scalar precision, 384 records, and 70,344 compared scalar components. Each case integrates 20 to
+per scalar precision, 672 records, and 137,016 compared scalar components. Each case integrates 20 to
 31 samples with varied biases, anisotropic noise, measurements, gravity, and timestep. Deliberate
 state and bias discrepancies make factor residuals and right-hand sides nonzero.
 
 Compared outputs are the complete 62-element measurement storage (including every bias derivative),
 9x9 covariance, rolled-forward pose/velocity, and residual/Jacobian/Hessian/right-hand-side outputs
-for the fixed-gravity, variable-gravity, and gravity-direction factor parameterizations. Hessians
+for the fixed-gravity, variable-gravity, and gravity-direction factor parameterizations. Each factor
+is evaluated both with covariance-derived square-root information and with a deterministic,
+non-diagonal lower-triangular square-root-information matrix. This broader branch is deliberately
+shared with the fresh-generation contract so it can distinguish generator errors from stale runtime
+kernels. Hessians
 are symmetrized from their defined lower triangle on both sides; unspecified upper-triangle memory
 is not treated as a numerical output.
 
@@ -83,7 +125,7 @@ guarantee.
 ## Deliberate boundaries
 
 This baseline does not redesign optimization APIs, generalize the dataset-specific BAL fast path,
-implement missing Unit3 code-generation inputs or sparse generated outputs, or establish complete
-regeneration of every checked-in generic IMU kernel. The current executable example parity helper
-checks selected optimization results, not every solver trajectory or failure mode. Those are
-separate follow-up workstreams; do not interpret the new CI as proving them.
+implement sparse generated outputs, or establish complete regeneration of every checked-in generic
+IMU kernel. The current executable example parity helper checks selected optimization results, not
+every solver trajectory or failure mode. Those are separate follow-up workstreams; do not interpret
+the new CI as proving them.
